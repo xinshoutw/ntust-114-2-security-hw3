@@ -24,6 +24,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Train all Step 2 attack models independently.")
     parser.add_argument("--config", default="config.yaml", help="Training config path.")
     parser.add_argument("--datasets", nargs="*", default=list(DATASETS), help="Dataset names to train.")
+    parser.add_argument(
+        "--device",
+        default=None,
+        choices=["auto", "cuda", "mps", "cpu"],
+        help="Training device passed to scripts/train.py.",
+    )
     args = parser.parse_args()
 
     for dataset_name in args.datasets:
@@ -45,6 +51,8 @@ def main() -> None:
             "--config",
             args.config,
         ]
+        if args.device:
+            command.extend(["--device", args.device])
 
         print(f"training {dataset_name}")
         subprocess.run(command, check=True)

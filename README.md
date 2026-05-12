@@ -120,11 +120,17 @@ uv run python -m facedeid.pixelize     --input data/att_faces --output outputs/p
 # 先安裝 Step 2 需要的 torch / torchvision
 uv sync --extra attack
 
-# 單獨訓練一組資料
-uv run --extra attack python scripts/train.py --dataset-root outputs/pixelized/pix_b8 --name pix_b8 --config config.yaml
+# 單獨訓練一組資料；auto 會優先使用 CUDA，其次 Apple MPS，最後 CPU
+uv run --extra attack python scripts/train.py --dataset-root outputs/pixelized/pix_b8 --name pix_b8 --config config.yaml --device auto
 
 # 一次分別訓練 original + pix_b{2,4,8,16} + blur_k{15,45,99}
-uv run --extra attack python scripts/train_all.py --config config.yaml
+uv run --extra attack python scripts/train_all.py --config config.yaml --device auto
+
+# Apple Silicon / M4 Pro 可明確指定 Metal GPU
+uv run --extra attack python scripts/train_all.py --config config.yaml --device mps
+
+# NVIDIA CUDA 可明確指定 CUDA GPU
+uv run --extra attack python scripts/train_all.py --config config.yaml --device cuda
 
 # 產生 loss / accuracy 曲線與 Top-1 / Top-5 summary
 uv run --extra attack python scripts/plot_log.py --log-dir logs

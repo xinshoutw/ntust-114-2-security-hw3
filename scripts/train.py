@@ -63,12 +63,46 @@ def set_seed(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
-def get_device() -> torch.device:
-    if torch.cuda.is_available():
+def get_device(requested: str = "auto") -> torch.device:
+    """Return the training device.
+
+    auto:
+        Prefer CUDA, then Apple Metal/MPS, then CPU.
+    cuda/mps:
+        Require that GPU backend. If it is unavailable, fail loudly instead of
+        silently falling back to CPU.
+    cpu:
+        Force CPU training.
+    """
+    requested = requested.lower()
+    if requested == "auto":
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        if torch.backends.mps.is_available():
+            return torch.device("mps")
+        return torch.device("cpu")
+
+    if requested == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "CUDA was requested, but torch.cuda.is_available() is False. "
+                "Install a CUDA-enabled PyTorch build or use --device auto/cpu."
+            )
         return torch.device("cuda")
-    if torch.backends.mps.is_available():
+
+    if requested == "mps":
+        if not torch.backends.mps.is_available():
+            raise RuntimeError(
+                "MPS was requested, but torch.backends.mps.is_available() is False. "
+                "Run this on an Apple Silicon Mac with an MPS-enabled PyTorch build "
+                "or use --device auto/cpu."
+            )
         return torch.device("mps")
-    return torch.device("cpu")
+
+    if requested == "cpu":
+        return torch.device("cpu")
+
+    raise ValueError("device must be one of: auto, cuda, mps, cpu")
 
 
 def load_split(path: str | Path) -> dict[str, Any]:
@@ -131,6 +165,7 @@ def build_loaders(
     train_split: str | Path,
     test_split: str | Path,
     config: dict[str, Any],
+    device: torch.device,
 ) -> tuple[DataLoader, DataLoader, dict[int, str]]:
     train_dataset = SplitImageDataset(dataset_root, train_split, int(config["image_size"]))
     test_dataset = SplitImageDataset(dataset_root, test_split, int(config["image_size"]))
@@ -143,14 +178,14 @@ def build_loaders(
         batch_size=int(config["batch_size"]),
         shuffle=True,
         num_workers=int(config["num_workers"]),
-        pin_memory=torch.cuda.is_available(),
+        pin_memory=device.type == "cuda",
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=int(config["batch_size"]),
         shuffle=False,
         num_workers=int(config["num_workers"]),
-        pin_memory=torch.cuda.is_available(),
+        pin_memory=device.type == "cuda",
     )
     return train_loader, test_loader, train_dataset.label_to_name
 
@@ -172,8 +207,9 @@ def run_one_epoch(
 
     with torch.set_grad_enabled(is_training):
         for images, labels in loader:
-            images = images.to(device)
-            labels = labels.to(device)
+            non_blocking = device.type == "cuda"
+            images = images.to(device, non_blocking=non_blocking)
+            labels = labels.to(device, non_blocking=non_blocking)
 
             outputs = model(images)
             loss = criterion(outputs, labels)
@@ -241,6 +277,12 @@ def main() -> None:
     parser.add_argument("--config", default="config.yaml", help="Training config path.")
     parser.add_argument("--train-split", default=None, help="Defaults to config train_split.")
     parser.add_argument("--test-split", default=None, help="Defaults to config test_split.")
+    parser.add_argument(
+        "--device",
+        default=None,
+        choices=["auto", "cuda", "mps", "cpu"],
+        help="Training device. Defaults to config device, then auto.",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -251,12 +293,13 @@ def main() -> None:
     checkpoint_dir = Path(str(config.get("checkpoint_dir", "checkpoints")))
     log_dir = Path(str(config.get("log_dir", "logs")))
 
-    device = get_device()
+    device = get_device(args.device or str(config.get("device", "auto")))
     train_loader, test_loader, label_to_name = build_loaders(
         dataset_root=args.dataset_root,
         train_split=train_split,
         test_split=test_split,
         config=config,
+        device=device,
     )
 
     model = SimpleCNN(num_classes=len(label_to_name)).to(device)
