@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# uv / venv（依賴用 `uv sync` 從 pyproject + uv.lock 還原）
+.venv/
+
+# 訓練產物（Step 2 成員 3 之後產出；用 scripts 重建）
+checkpoints/
+*.pth
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+.ruff_cache/
+.pytest_cache/
