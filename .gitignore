@@ -6,10 +6,11 @@ __pycache__/
 build/
 dist/
 
-# uv / venv（依賴用 `uv sync` 從 pyproject + uv.lock 還原）
+# uv / virtual environment
 .venv/
+.uv-cache/
 
-# 訓練產物（Step 2 成員 3 之後產出；用 scripts 重建）
+# Step 2 generated training outputs
 checkpoints/
 *.pth
 logs/

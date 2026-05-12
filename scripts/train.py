@@ -294,6 +294,8 @@ def main() -> None:
     log_dir = Path(str(config.get("log_dir", "logs")))
 
     device = get_device(args.device or str(config.get("device", "auto")))
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
     train_loader, test_loader, label_to_name = build_loaders(
         dataset_root=args.dataset_root,
         train_split=train_split,
