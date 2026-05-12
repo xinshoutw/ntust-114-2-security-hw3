@@ -1,0 +1,12 @@
+# Step 2 CNN attack training config.
+image_size: 128
+batch_size: 32
+epochs: 100
+learning_rate: 0.01
+momentum: 0.9
+num_workers: 2
+seed: 42
+train_split: outputs/split_train.json
+test_split: outputs/split_test.json
+checkpoint_dir: checkpoints
+log_dir: logs

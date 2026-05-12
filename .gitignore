@@ -12,6 +12,9 @@ dist/
 # 訓練產物（Step 2 成員 3 之後產出；用 scripts 重建）
 checkpoints/
 *.pth
+logs/
+plots/
+reports/
 
 # OS / editor
 .DS_Store

@@ -37,7 +37,7 @@
 | Step 1 | Pixelization（b=2,4,8,16）、人臉偵測、資料載入 | ✅ 完成 |
 | Step 1 | Gaussian Blurring（k=15,45,99） | ✅ 完成 |
 | Step 1 | 視覺比較圖 | ✅ 完成 |
-| Step 2 | CNN 架構 + 訓練 pipeline（每組參數獨立訓練） | ⬜ 待成員 3 |
+| Step 2 | CNN 架構 + 訓練 pipeline（每組參數獨立訓練） | ✅ pipeline 已補，正式訓練結果待跑 |
 | Step 2 | Top-1/Top-5 評估 + 8 組攻擊實驗 + 對照表 | ⬜ 待成員 4 |
 | Step 3 | DP-Pixelization / DP-Blur + 敏感度推導 | ⬜ 待成員 5 |
 | Step 3 | MSE/SSIM vs ε 曲線、DP-vs-NP 攻擊準確率對照 | ⬜ 待成員 5（+ 成員 4） |
@@ -114,6 +114,23 @@ uv run python -m facedeid.gaussian_blur --input data/att_faces --output outputs/
 uv run python -m facedeid.pixelize     --input data/att_faces --output outputs/pixelized/pix_b8  --b 8
 ```
 
+### 跑 CNN 重識別攻擊 pipeline
+
+```bash
+# 先安裝 Step 2 需要的 torch / torchvision
+uv sync --extra attack
+
+# 單獨訓練一組資料
+uv run --extra attack python scripts/train.py --dataset-root outputs/pixelized/pix_b8 --name pix_b8 --config config.yaml
+
+# 一次分別訓練 original + pix_b{2,4,8,16} + blur_k{15,45,99}
+uv run --extra attack python scripts/train_all.py --config config.yaml
+
+# 產生 loss / accuracy 曲線與 Top-1 / Top-5 summary
+uv run --extra attack python scripts/plot_log.py --log-dir logs
+uv run --extra attack python scripts/summarize_logs.py --log-dir logs --output reports/summary.csv
+```
+
 ### 在程式碼中使用
 
 ```python
@@ -173,7 +190,7 @@ face-deid-hw3/
 
 > `outputs/` 已 commit 進 repo（確保組員拿到的內容完全一致），但它可由 `./scripts/run_*.sh` 從 `data/att_faces/` 重建。
 
-> Step 2（`model.py` / `train.py` / `config.yaml` / `evaluate.py`）與 Step 3（`dp_pixelize.py` / `dp_blur.py` / `compute_metrics.py`）的程式碼待對應成員交付後加入 `src/facedeid/` 與 `scripts/`。
+> Step 2 的 CNN 訓練 pipeline 已加入 `src/facedeid/model.py`、`scripts/train.py`、`scripts/train_all.py`、`scripts/plot_log.py`、`scripts/summarize_logs.py` 與 `config.yaml`；`evaluate.py` 與 Step 3（`dp_pixelize.py` / `dp_blur.py` / `compute_metrics.py`）待對應成員交付後加入。
 
 ---
 
