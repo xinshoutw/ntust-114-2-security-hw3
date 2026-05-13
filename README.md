@@ -37,7 +37,7 @@
 | Step 1 | Pixelization（b=2,4,8,16）、人臉偵測、資料載入 | ✅ 完成 |
 | Step 1 | Gaussian Blurring（k=15,45,99） | ✅ 完成 |
 | Step 1 | 視覺比較圖 | ✅ 完成 |
-| Step 2 | CNN 架構 + 訓練 pipeline（每組參數獨立訓練） | ✅ pipeline 已補，正式訓練結果待跑 |
+| Step 2 | CNN 架構 + 訓練 pipeline（每組參數獨立訓練） | ✅ 完成 |
 | Step 2 | Top-1/Top-5 評估 + 8 組攻擊實驗 + 對照表 | ⬜ 待成員 4 |
 | Step 3 | DP-Pixelization / DP-Blur + 敏感度推導 | ⬜ 待成員 5 |
 | Step 3 | MSE/SSIM vs ε 曲線、DP-vs-NP 攻擊準確率對照 | ⬜ 待成員 5（+ 成員 4） |
