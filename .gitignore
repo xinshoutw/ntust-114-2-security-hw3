@@ -11,8 +11,8 @@ dist/
 .uv-cache/
 
 # Step 2 generated training outputs
-checkpoints/
-*.pth
+# checkpoints/
+# *.pth
 logs/
 plots/
 reports/
