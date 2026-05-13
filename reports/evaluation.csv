@@ -1,0 +1,9 @@
+dataset,dataset_root,checkpoint,samples,num_classes,test_loss,top1_acc,top5_acc,best_epoch,checkpoint_best_test_acc,device
+original,data/att_faces,checkpoints/original.pth,80,40,0.438485,0.9,0.9875,93,0.9,cpu
+pix_b2,outputs/pixelized/pix_b2,checkpoints/pix_b2.pth,80,40,0.418666,0.925,0.975,73,0.925,cpu
+pix_b4,outputs/pixelized/pix_b4,checkpoints/pix_b4.pth,80,40,0.466903,0.9,0.9875,95,0.9,cpu
+pix_b8,outputs/pixelized/pix_b8,checkpoints/pix_b8.pth,80,40,0.435863,0.9125,0.9875,95,0.9125,cpu
+pix_b16,outputs/pixelized/pix_b16,checkpoints/pix_b16.pth,80,40,0.4899,0.9,1.0,97,0.9,cpu
+blur_k15,outputs/blurred/blur_k15,checkpoints/blur_k15.pth,80,40,0.385727,0.9125,0.9875,93,0.9125,cpu
+blur_k45,outputs/blurred/blur_k45,checkpoints/blur_k45.pth,80,40,0.55961,0.8875,0.9875,99,0.8875,cpu
+blur_k99,outputs/blurred/blur_k99,checkpoints/blur_k99.pth,80,40,0.585902,0.8625,0.9875,96,0.8625,cpu
