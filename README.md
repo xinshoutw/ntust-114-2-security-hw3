@@ -26,7 +26,7 @@
 
 ![detect + region pixelize](figures/detect_pixelize_demo.png)
 
-> `data/att_faces/` 為**真實的 AT&T (ORL) 人臉資料庫**（400 張 92×112 灰階 PGM，40 人各 10 張；來源見 [`data/README.md`](data/README.md)）。`scripts/make_synthetic_orl.py` 僅作為沒有網路 / 無法下載時的 fallback。
+> `data/att_faces/` 為**真實的 AT&T (ORL) 人臉資料庫**（400 張 92×112 灰階 PGM，40 人各 10 張；來源見 [`data/README.md`](data/README.md)）。
 
 ---
 
@@ -39,8 +39,8 @@
 | Step 1 | 視覺比較圖 | ✅ 完成 |
 | Step 2 | CNN 架構 + 訓練 pipeline（每組參數獨立訓練） | ✅ 完成 |
 | Step 2 | Top-1/Top-5 評估 + 8 組攻擊實驗 + 對照表 | ✅ 完成 |
-| Step 3 | DP-Pixelization / DP-Blur + 敏感度推導 | ⬜ 待成員 5 |
-| Step 3 | MSE/SSIM vs ε 曲線、DP-vs-NP 攻擊準確率對照 | ⬜ 待成員 5（+ 成員 4） |
+| Step 3 | DP-Pixelization / DP-Blur + 敏感度推導 | ✅ 外部交付（成員 5） |
+| Step 3 | MSE/SSIM vs ε 曲線、DP-vs-NP 攻擊準確率對照 | ✅ 完成 |
 | 文件 | 最終報告（方法 + 結果 + 討論 + 分工表） | 🟡 規劃中（由成員 2 統整、排版） |
 
 詳細分工見 [`docs/division-of-labor.md`](docs/division-of-labor.md)。
@@ -49,12 +49,12 @@
 
 ## 給組員（必讀）
 
-整個 repo 都在這裡、沒有任何保留 —— 程式碼、資料、產出全部同步。要快速接手 Step 2 / Step 3，只要看這幾個地方：
+主要程式碼、可重建資料與報告用圖表都在 repo；模型 checkpoint、訓練 logs、reports 與 DP 影像資料集以外部 zip 交付。要快速接手 Step 2 / Step 3，只要看這幾個地方：
 
 | 你是 | 直接拿 | 一定要看 |
 |---|---|---|
 | **成員 3、4（CNN 攻擊）** | `outputs/pixelized/pix_b{2,4,8,16}/`、`outputs/blurred/blur_k{15,45,99}/`（已從真實 ORL 產好；結構同 ORL、檔名一一對應）、`outputs/split_train.json` / `outputs/split_test.json`（標準切分） | `docs/division-of-labor.md` 的「交付對接備註」、`src/facedeid/dataset_loader.py`（用 `DatasetIndex.from_att(...)` + `stratified_split(..., seed=42)`，**8 組各自獨立訓練、不可混訓**） |
-| **成員 5（差分隱私）** | `outputs/pixelized/` 與 `outputs/blurred/` 當 **NP baseline**；`data/att_faces/`（原圖，算 MSE/SSIM 用） | `src/facedeid/pixelize.py`、`src/facedeid/gaussian_blur.py`（DP 版在「未加噪的 cell 平均 / blur 後像素」上加 Laplace 噪聲；敏感度推導見 `docs/division-of-labor.md`） |
+| **成員 5（差分隱私）** | 外部 artifact `for_cnn.zip`（DP 影像資料集與 `metrics.csv`） | 本 repo 使用 `scripts/train_evaluate_dp.py` 重跑 CNN attack，結果整理於 `docs/dp-attack-results.md` |
 | 想了解全貌 | — | 本 README 的「總覽」「專案架構」、`docs/division-of-labor.md` |
 
 > 跑法：`uv sync` 之後 `./scripts/run_pixelize.sh` / `./scripts/run_blur.sh` 可重建 `outputs/`；`uv run pytest` 跑煙霧測試。新增的去識別化變體一律沿用 `seed=42` 的切分。
@@ -96,9 +96,7 @@ uv run ruff check src scripts tests # 風格檢查
 ### 跑去識別化 pipeline
 
 ```bash
-# 0. 準備資料集：把真實 ORL 放到 data/att_faces/s1 ... s40（見 data/README.md）
-#    或先用合成資料驗證 pipeline：
-uv run python scripts/make_synthetic_orl.py
+# 0. 準備資料集：確認真實 ORL 位於 data/att_faces/s1 ... s40（見 data/README.md）
 
 # 1. 產生去識別化資料集（輸出到 outputs/，已被 .gitignore）
 ./scripts/run_pixelize.sh           # → outputs/pixelized/pix_b{2,4,8,16}
@@ -138,6 +136,10 @@ uv run --extra attack python scripts/summarize_logs.py --log-dir logs --output r
 
 # 評估 8 組 checkpoint 的 Top-1 / Top-5 attack accuracy
 uv run --extra attack python scripts/evaluate.py --all --device auto --output reports/evaluation.csv
+
+# 若已收到成員 5 的 for_cnn.zip 並解壓成 outputs/for_cnn/
+# 可訓練並評估 DP 版本的 attack accuracy
+uv run --extra attack python scripts/train_evaluate_dp.py --device auto --output reports/dp_evaluation.csv
 ```
 
 ### 在程式碼中使用
@@ -184,8 +186,8 @@ face-deid-hw3/
 │   ├── make_pixelize_comparison.py # Pixelization 視覺比較圖
 │   ├── make_blur_comparison.py     # Gaussian Blur 視覺比較圖
 │   ├── make_detect_pixelize_demo.py# 偵測 + 區域去識別化示意圖
-│   ├── make_synthetic_orl.py       # 沒有真實 ORL 時的 fallback 測試資料
-│   └── evaluate.py                 # Step 2 Top-1 / Top-5 評估
+│   ├── evaluate.py                 # Step 2 Top-1 / Top-5 評估
+│   └── train_evaluate_dp.py        # Step 3 DP 資料的 CNN attack 驗證
 ├── tests/
 │   └── test_smoke.py               # 去識別化函式的最小煙霧測試（uv run pytest）
 ├── figures/                        # 報告用視覺比較圖
@@ -200,7 +202,7 @@ face-deid-hw3/
 
 > `outputs/` 已 commit 進 repo（確保組員拿到的內容完全一致），但它可由 `./scripts/run_*.sh` 從 `data/att_faces/` 重建。
 
-> Step 2 的 CNN 訓練與評估 pipeline 已加入 `src/facedeid/model.py`、`scripts/train.py`、`scripts/train_all.py`、`scripts/plot_log.py`、`scripts/summarize_logs.py`、`scripts/evaluate.py` 與 `config.yaml`；Step 3（`dp_pixelize.py` / `dp_blur.py` / `compute_metrics.py`）待對應成員交付後加入。
+> Step 2 的 CNN 訓練與評估 pipeline 已加入 `src/facedeid/model.py`、`scripts/train.py`、`scripts/train_all.py`、`scripts/plot_log.py`、`scripts/summarize_logs.py`、`scripts/evaluate.py` 與 `config.yaml`。Step 3 的 DP 影像與 MSE/SSIM 由成員 5 以外部 artifact `for_cnn.zip` 提供，本 repo 以 `scripts/train_evaluate_dp.py` 完成 CNN attack 驗證。
 
 ---
 
@@ -212,7 +214,7 @@ face-deid-hw3/
 2. **成員 2** — Gaussian Blurring（k=15,45,99）、報告整合、最終打包：`gaussian_blur.py`、`run_blur.sh`、視覺比較圖、最終報告（規劃/排版）、本 repo 整理。
 3. **成員 3** — CNN 架構與訓練 pipeline（每組去識別化參數獨立訓練）：`model.py`、`train.py`、`config.yaml`、訓練 log、各參數 `.pth`。
 4. **成員 4** — CNN 評估與攻擊實驗：`evaluate.py`（Top-1/Top-5）、8 組攻擊結果對照表、攻擊分析。
-5. **成員 5** — 差分隱私：`dp_pixelize.py`、`dp_blur.py`、`compute_metrics.py`、ε 掃描、MSE/SSIM 曲線、DP-vs-NP 對照表、敏感度推導文件。
+5. **成員 5** — 差分隱私：外部提供 DP 影像資料集、`metrics.csv`、MSE/SSIM 曲線與敏感度推導文件；本 repo 已完成 DP-vs-NP CNN attack 對照表。
 
 提交前請確認：
 

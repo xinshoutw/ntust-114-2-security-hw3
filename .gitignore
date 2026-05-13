@@ -16,6 +16,7 @@ checkpoints/
 logs/
 plots/
 reports/
+outputs/for_cnn/
 
 # OS / editor
 .DS_Store
