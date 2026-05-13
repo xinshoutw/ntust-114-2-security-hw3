@@ -3,7 +3,7 @@ name = "face-deid-hw3"
 version = "0.1.0"
 description = "人臉去識別化方法與 AI 重識別攻擊之研究（HW3）— Pixelization / Gaussian Blurring、CNN 重識別攻擊、差分隱私"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "opencv-python>=4.10",
     "numpy>=1.26",

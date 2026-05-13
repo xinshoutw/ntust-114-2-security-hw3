@@ -63,13 +63,13 @@
 
 ## 系統需求
 
-| 項目 | 需求 |
-|---|---|
-| Python | 3.13（見 `.python-version`；最低相容 3.10） |
-| 套件管理 | [uv](https://docs.astral.sh/uv/) |
-| 核心依賴 | `opencv-python`、`numpy`、`matplotlib`（見 `pyproject.toml`） |
+| 項目 | 需求                                                                 |
+|---|--------------------------------------------------------------------|
+| Python | 3.13（見 `.python-version`；最低相容 3.11）                                |
+| 套件管理 | [uv](https://docs.astral.sh/uv/)                                   |
+| 核心依賴 | `opencv-python`、`numpy`、`matplotlib`（見 `pyproject.toml`）           |
 | 可選 | `dlib`（HOG+SVM 人臉偵測，編譯需 cmake）、`torch` / `torchvision`（Step 2 CNN） |
-| 作業系統 | macOS / Linux（`scripts/*.sh` 為 bash 腳本） |
+| 作業系統 | macOS / Linux（`scripts/*.sh` 為 bash 腳本）                            |
 
 ---
 
