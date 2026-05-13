@@ -1,152 +1,210 @@
-import numpy as np
-import cv2
+"""Plot DP utility curves (MSE/SSIM vs epsilon) and DP attack accuracy.
+
+Reads pre-computed CSVs — does NOT regenerate any DP images:
+  * --metrics-csv  (data/dp/metrics.csv)  : method, k, epsilon, MSE, SSIM, n
+  * --attack-csv   (reports/dp_evaluation.csv) : dataset, top1_acc, ...
+
+Outputs:
+  * figures/dp_metrics_curves.png    — MSE and SSIM vs ε per method
+  * figures/dp_attack_accuracy.png   — Top-1 attack accuracy vs ε per method
+"""
+
+from __future__ import annotations
+
+import argparse
 import csv
-import matplotlib.pyplot as plt
-from pathlib import Path
 from collections import defaultdict
-from skimage.metrics import structural_similarity, mean_squared_error
+from pathlib import Path
 
-from dp_pixelization import dp_pixelization
-from dp_blur import dp_blur
-
-EPSILONS    = [0.1, 0.3, 0.5, 0.7, 1.0, 3.0, 5.0]
-BLOCK_SIZES = [8, 16]
-SRC_ROOT    = "data/att_faces"
-OUT_ROOT    = "output"
+import matplotlib.pyplot as plt
 
 
-# ── 1. 載入影像 ────────────────────────────────────────────────────────────────
+# Method display order, marker, line style, and color
+STYLES = {
+    "DP-Pix-b2":      {"marker": "o", "linestyle": "-",  "color": "#0D47A1"},
+    "DP-Pix-b4":      {"marker": "o", "linestyle": "-",  "color": "#1976D2"},
+    "DP-Pix-b8":      {"marker": "s", "linestyle": "-",  "color": "#42A5F5"},
+    "DP-Pix-b16":     {"marker": "s", "linestyle": "--", "color": "#90CAF9"},
+    "LP-Blur":        {"marker": "^", "linestyle": "-.", "color": "#FF7043"},
+    "DP-Blur-Split":  {"marker": "v", "linestyle": ":",  "color": "#D32F2F"},
+}
 
-def load_images(src_root: str):
-    src = Path(src_root)
-    imgs = []
-    for pgm in sorted(src.rglob("*.pgm")):
-        img = cv2.imread(str(pgm), cv2.IMREAD_GRAYSCALE)
-        imgs.append((pgm, img))
-    return imgs
-
-
-def calc_metrics(original: np.ndarray, processed: np.ndarray):
-    mse  = mean_squared_error(original, processed)
-    ssim = structural_similarity(original, processed, data_range=255)
-    return mse, ssim
-
-
-# ── 2. ε 掃描 + 存 CSV ─────────────────────────────────────────────────────────
-
-def run_scan():
-    images = load_images(SRC_ROOT)
-    rows = []
-
-    for eps in EPSILONS:
-        # DP-Pixelization
-        for b in BLOCK_SIZES:
-            mse_list, ssim_list = [], []
-            dst = Path(OUT_ROOT) / f"dp_pix_b{b}" / f"eps{eps}"
-            dst.mkdir(parents=True, exist_ok=True)
-
-            for pgm, img in images:
-                result = dp_pixelization(img, b, eps)
-                rel = pgm.relative_to(SRC_ROOT)
-                out_path = dst / rel.with_suffix(".png")
-                out_path.parent.mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(str(out_path), result)
-
-                mse, ssim = calc_metrics(img, result)
-                mse_list.append(mse)
-                ssim_list.append(ssim)
-
-            rows.append({
-                "method":  f"DP-Pix-b{b}",
-                "epsilon": eps,
-                "MSE":     float(np.mean(mse_list)),
-                "SSIM":    float(np.mean(ssim_list)),
-            })
-            print(f"DP-Pix b={b}  ε={eps}  MSE={rows[-1]['MSE']:.2f}  SSIM={rows[-1]['SSIM']:.4f}")
-
-        # DP-Blur
-        mse_list, ssim_list = [], []
-        dst = Path(OUT_ROOT) / "dp_blur" / f"eps{eps}"
-        dst.mkdir(parents=True, exist_ok=True)
-
-        for pgm, img in images:
-            result = dp_blur(img, eps)
-            rel = pgm.relative_to(SRC_ROOT)
-            out_path = dst / rel.with_suffix(".png")
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            cv2.imwrite(str(out_path), result)
-
-            mse, ssim = calc_metrics(img, result)
-            mse_list.append(mse)
-            ssim_list.append(ssim)
-
-        rows.append({
-            "method":  "DP-Blur",
-            "epsilon": eps,
-            "MSE":     float(np.mean(mse_list)),
-            "SSIM":    float(np.mean(ssim_list)),
-        })
-        print(f"DP-Blur      ε={eps}  MSE={rows[-1]['MSE']:.2f}  SSIM={rows[-1]['SSIM']:.4f}")
-
-    csv_path = Path(OUT_ROOT) / "metrics.csv"
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(csv_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["method", "epsilon", "MSE", "SSIM"])
-        writer.writeheader()
-        writer.writerows(rows)
-    print(f"\nmetrics saved → {csv_path}")
-    return rows
+# Map attack CSV dataset names → method labels used in the metrics CSV
+ATTACK_DATASET_TO_METHOD = {
+    "dp_pix_b2":               "DP-Pix-b2",
+    "dp_pix_b4":               "DP-Pix-b4",
+    "dp_pix_b8":               "DP-Pix-b8",
+    "dp_pix_b16":              "DP-Pix-b16",
+    "lp_blur_k45":             "LP-Blur",
+    "dp_blur_split_k45":       "DP-Blur-Split",
+}
 
 
-# ── 3. 畫曲線圖 ────────────────────────────────────────────────────────────────
+def parse_attack_name(dataset_name: str) -> tuple[str | None, float | None]:
+    """Parse ``dp_pix_b8_eps0_1`` → (DP-Pix-b8, 0.1) and similar."""
+    if "_eps" not in dataset_name:
+        return None, None
+    head, eps_token = dataset_name.rsplit("_eps", 1)
+    try:
+        eps = float(eps_token.replace("_", "."))
+    except ValueError:
+        return None, None
+    method = ATTACK_DATASET_TO_METHOD.get(head)
+    return method, eps
 
-def plot_curves(rows: list):
-    # 整理成 {method: {eps: [], MSE: [], SSIM: []}}
-    data = defaultdict(lambda: {"eps": [], "MSE": [], "SSIM": []})
-    for row in rows:
-        m = row["method"]
-        data[m]["eps"].append(row["epsilon"])
-        data[m]["MSE"].append(row["MSE"])
-        data[m]["SSIM"].append(row["SSIM"])
 
-    styles = {
-        "DP-Pix-b8":  {"marker": "o", "linestyle": "-",  "color": "#2196F3"},
-        "DP-Pix-b16": {"marker": "s", "linestyle": "--", "color": "#4CAF50"},
-        "DP-Blur":    {"marker": "^", "linestyle": "-.", "color": "#F44336"},
-    }
+def load_metrics(path: Path) -> dict[str, dict[float, dict[str, float]]]:
+    """Return ``{method: {epsilon: {"MSE": x, "SSIM": y}}}`` keyed by method."""
+    out: dict[str, dict[float, dict[str, float]]] = defaultdict(dict)
+    with path.open() as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            method = row["method"]
+            if method not in STYLES:
+                continue
+            # Only keep the main ε-scan rows (LP-Blur/DP-Blur-Split have k=45;
+            # DP-Pix has no k column populated — accept blank). Visual-only
+            # k=15/99 rows are skipped because they have only one ε value.
+            k = row.get("k") or ""
+            if method in {"LP-Blur", "DP-Blur-Split"} and k != "45":
+                continue
+            try:
+                eps = float(row["epsilon"])
+                out[method][eps] = {
+                    "MSE": float(row["MSE"]),
+                    "SSIM": float(row["SSIM"]),
+                }
+            except ValueError:
+                continue
+    return out
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
 
-    for method, d in data.items():
-        kw = styles.get(method, {"marker": "x", "linestyle": ":"})
-        ax1.plot(d["eps"], d["MSE"],  label=method, **kw)
-        ax2.plot(d["eps"], d["SSIM"], label=method, **kw)
+def load_attack(path: Path) -> dict[str, dict[float, float]]:
+    """Return ``{method: {epsilon: top1_acc}}``."""
+    out: dict[str, dict[float, float]] = defaultdict(dict)
+    if not path.exists():
+        return out
+    with path.open() as f:
+        for row in csv.DictReader(f):
+            method, eps = parse_attack_name(row["dataset"])
+            if method is None or eps is None:
+                continue
+            try:
+                out[method][eps] = float(row["top1_acc"])
+            except (KeyError, ValueError):
+                continue
+    return out
 
-    # MSE 圖
-    ax1.set_xlabel("Privacy Budget ε", fontsize=12)
-    ax1.set_ylabel("MSE", fontsize=12)
-    ax1.set_title("MSE vs ε", fontsize=13, fontweight="bold")
+
+def plot_metrics(
+    metrics: dict[str, dict[float, dict[str, float]]],
+    output_path: Path,
+) -> None:
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5))
+
+    for method in STYLES:
+        if method not in metrics:
+            continue
+        eps_pairs = sorted(metrics[method].items())
+        if not eps_pairs:
+            continue
+        epsilons = [e for e, _ in eps_pairs]
+        mses = [d["MSE"] for _, d in eps_pairs]
+        ssims = [d["SSIM"] for _, d in eps_pairs]
+        ax1.plot(epsilons, mses, label=method, **STYLES[method])
+        ax2.plot(epsilons, ssims, label=method, **STYLES[method])
+
+    ax1.set_xlabel("Privacy Budget ε")
+    ax1.set_ylabel("MSE")
+    ax1.set_title("MSE vs ε")
     ax1.set_xscale("log")
-    ax1.legend(fontsize=10)
+    ax1.set_yscale("log")
     ax1.grid(True, alpha=0.3)
+    ax1.legend(fontsize=9, loc="best")
 
-    # SSIM 圖
-    ax2.set_xlabel("Privacy Budget ε", fontsize=12)
-    ax2.set_ylabel("SSIM", fontsize=12)
-    ax2.set_title("SSIM vs ε", fontsize=13, fontweight="bold")
+    ax2.set_xlabel("Privacy Budget ε")
+    ax2.set_ylabel("SSIM")
+    ax2.set_title("SSIM vs ε")
     ax2.set_xscale("log")
-    ax2.legend(fontsize=10)
+    ax2.set_ylim(0, 1)
     ax2.grid(True, alpha=0.3)
+    ax2.legend(fontsize=9, loc="best")
 
-    plt.tight_layout()
-    out_path = Path(OUT_ROOT) / "curves.png"
-    plt.savefig(out_path, dpi=150)
-    plt.close()
-    print(f"curves saved → {out_path}")
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=150)
+    plt.close(fig)
+    print(f"saved: {output_path}")
 
 
-# ── 4. 主程式 ──────────────────────────────────────────────────────────────────
+def plot_attack(
+    attack: dict[str, dict[float, float]],
+    output_path: Path,
+) -> None:
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+
+    plotted = 0
+    for method in STYLES:
+        if method not in attack:
+            continue
+        eps_pairs = sorted(attack[method].items())
+        if not eps_pairs:
+            continue
+        epsilons = [e for e, _ in eps_pairs]
+        accs = [a for _, a in eps_pairs]
+        ax.plot(epsilons, accs, label=method, **STYLES[method])
+        plotted += 1
+
+    ax.axhline(1 / 40, color="black", linestyle=":", linewidth=1, label="Random (1/40)")
+    ax.set_xlabel("Privacy Budget ε")
+    ax.set_ylabel("Top-1 Attack Accuracy")
+    ax.set_title("CNN re-identification attack accuracy vs ε")
+    ax.set_xscale("log")
+    ax.set_ylim(0, 1)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=9, loc="best")
+
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=150)
+    plt.close(fig)
+    print(f"saved: {output_path}  ({plotted} methods plotted)")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--metrics-csv", default="data/dp/metrics.csv")
+    parser.add_argument("--attack-csv", default="reports/dp_evaluation.csv")
+    parser.add_argument(
+        "--metrics-output",
+        default="figures/dp_metrics_curves.png",
+    )
+    parser.add_argument(
+        "--attack-output",
+        default="figures/dp_attack_accuracy.png",
+    )
+    # Backwards-compatible aliases for the names suggested in docs/RESUME.md
+    parser.add_argument("--metrics", dest="metrics_csv", help="Alias for --metrics-csv")
+    parser.add_argument("--attack", dest="attack_csv", help="Alias for --attack-csv")
+    args = parser.parse_args()
+
+    metrics_path = Path(args.metrics_csv)
+    attack_path = Path(args.attack_csv)
+
+    if not metrics_path.exists():
+        raise FileNotFoundError(f"metrics csv not found: {metrics_path}")
+
+    metrics = load_metrics(metrics_path)
+    print(f"loaded metrics for {len(metrics)} methods from {metrics_path}")
+    plot_metrics(metrics, Path(args.metrics_output))
+
+    attack = load_attack(attack_path)
+    if attack:
+        print(f"loaded attack accuracy for {len(attack)} methods from {attack_path}")
+        plot_attack(attack, Path(args.attack_output))
+    else:
+        print(f"no attack accuracy at {attack_path}, skipping attack plot")
+
 
 if __name__ == "__main__":
-    rows = run_scan()
-    plot_curves(rows)
+    main()
