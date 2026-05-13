@@ -38,7 +38,7 @@
 | Step 1 | Gaussian Blurring（k=15,45,99） | ✅ 完成 |
 | Step 1 | 視覺比較圖 | ✅ 完成 |
 | Step 2 | CNN 架構 + 訓練 pipeline（每組參數獨立訓練） | ✅ 完成 |
-| Step 2 | Top-1/Top-5 評估 + 8 組攻擊實驗 + 對照表 | ⬜ 待成員 4 |
+| Step 2 | Top-1/Top-5 評估 + 8 組攻擊實驗 + 對照表 | ✅ 完成 |
 | Step 3 | DP-Pixelization / DP-Blur + 敏感度推導 | ⬜ 待成員 5 |
 | Step 3 | MSE/SSIM vs ε 曲線、DP-vs-NP 攻擊準確率對照 | ⬜ 待成員 5（+ 成員 4） |
 | 文件 | 最終報告（方法 + 結果 + 討論 + 分工表） | 🟡 規劃中（由成員 2 統整、排版） |
@@ -135,6 +135,9 @@ uv run --extra attack python scripts/train_all.py --config config.yaml --device 
 # 產生 loss / accuracy 曲線與 Top-1 / Top-5 summary
 uv run --extra attack python scripts/plot_log.py --log-dir logs
 uv run --extra attack python scripts/summarize_logs.py --log-dir logs --output reports/summary.csv
+
+# 評估 8 組 checkpoint 的 Top-1 / Top-5 attack accuracy
+uv run --extra attack python scripts/evaluate.py --all --device auto --output reports/evaluation.csv
 ```
 
 ### 在程式碼中使用
@@ -181,7 +184,8 @@ face-deid-hw3/
 │   ├── make_pixelize_comparison.py # Pixelization 視覺比較圖
 │   ├── make_blur_comparison.py     # Gaussian Blur 視覺比較圖
 │   ├── make_detect_pixelize_demo.py# 偵測 + 區域去識別化示意圖
-│   └── make_synthetic_orl.py       # 沒有真實 ORL 時的 fallback 測試資料
+│   ├── make_synthetic_orl.py       # 沒有真實 ORL 時的 fallback 測試資料
+│   └── evaluate.py                 # Step 2 Top-1 / Top-5 評估
 ├── tests/
 │   └── test_smoke.py               # 去識別化函式的最小煙霧測試（uv run pytest）
 ├── figures/                        # 報告用視覺比較圖
@@ -196,7 +200,7 @@ face-deid-hw3/
 
 > `outputs/` 已 commit 進 repo（確保組員拿到的內容完全一致），但它可由 `./scripts/run_*.sh` 從 `data/att_faces/` 重建。
 
-> Step 2 的 CNN 訓練 pipeline 已加入 `src/facedeid/model.py`、`scripts/train.py`、`scripts/train_all.py`、`scripts/plot_log.py`、`scripts/summarize_logs.py` 與 `config.yaml`；`evaluate.py` 與 Step 3（`dp_pixelize.py` / `dp_blur.py` / `compute_metrics.py`）待對應成員交付後加入。
+> Step 2 的 CNN 訓練與評估 pipeline 已加入 `src/facedeid/model.py`、`scripts/train.py`、`scripts/train_all.py`、`scripts/plot_log.py`、`scripts/summarize_logs.py`、`scripts/evaluate.py` 與 `config.yaml`；Step 3（`dp_pixelize.py` / `dp_blur.py` / `compute_metrics.py`）待對應成員交付後加入。
 
 ---
 
