@@ -8,7 +8,7 @@
 | 成員 2 | Step 1 + 整合 | Gaussian Blurring（k=15,45,99）、報告整合、本 repo 整理與最終打包 | `src/facedeid/gaussian_blur.py`、`scripts/run_blur.sh`、`scripts/make_blur_comparison.py`、`figures/blur_comparison.png`、`README.md`、最終報告（規劃 + 排版） | ✅（程式碼）／🟡（報告） |
 | 成員 3 | Step 2 | CNN 架構與訓練 pipeline；對「每一種去識別化參數」獨立訓練（不混訓） | `src/facedeid/model.py`、`scripts/train.py`、`scripts/train_all.py`、`scripts/plot_log.py`、`scripts/summarize_logs.py`、`config.yaml`、訓練 log（loss/acc 曲線）、各參數 `.pth` | ✅ |
 | 成員 4 | Step 2 | CNN 評估（Top-1/Top-5）；跑完 8 組攻擊（原圖 + pix b∈{2,4,8,16} + blur k∈{15,45,99}）；整理對照表 | `scripts/evaluate.py`、`docs/attack-results.md`、完整攻擊結果表、攻擊分析文件 | ✅ |
-| 成員 5 | Step 3 | DP-Pixelization、DP-Blur；ε 掃描 {0.1,0.3,0.5,0.7,1,3,5}；MSE/SSIM；把 DP 影像交成員 4 重跑攻擊 | `data/dp/{dp_pix_b8,dp_pix_b16,dp_blur}/eps*/`、`data/dp/metrics.csv`、`docs/Differentially_Private_Image_Obfuscation.pdf`（敏感度推導）；本 repo 補 `scripts/train_evaluate_dp.py` 與 `docs/dp-attack-results.md` | ✅ |
+| 成員 5 | Step 3 | DP-Pixelization b∈{2,4,8,16}、兩種 DP-Blur 機制（LP-Blur, DP-Blur-Split）；ε 掃描 {0.1,0.3,0.5,0.7,1,3,5}；MSE/SSIM；CNN 攻擊驗證（42 組） | `data/dp/{dp_pix_b{2,4,8,16},lp_blur,dp_blur_split}/eps*/`、`data/dp/metrics.csv`、`docs/Differentially_Private_Image_Obfuscation.pdf`（敏感度推導）；本 repo 補 `scripts/{dp_pixelization,dp_blur,train_evaluate_dp,plot_curves}.py` 與 `docs/dp-attack-results.md` | ✅ |
 
 ## 交付對接備註
 
@@ -19,5 +19,4 @@
 
 ## 待補進 repo 的東西
 
-- `tests/`（pipeline 的最小單元測試）
 - 最終報告檔（成員 2）

@@ -37,10 +37,10 @@
 | Step 1 | Pixelization（b=2,4,8,16）、人臉偵測、資料載入 | ✅ 完成 |
 | Step 1 | Gaussian Blurring（k=15,45,99） | ✅ 完成 |
 | Step 1 | 視覺比較圖 | ✅ 完成 |
-| Step 2 | CNN 架構 + 訓練 pipeline（每組參數獨立訓練） | ✅ 完成 |
-| Step 2 | Top-1/Top-5 評估 + 8 組攻擊實驗 + 對照表 | ✅ 完成 |
-| Step 3 | DP-Pixelization / DP-Blur + 敏感度推導 | ✅ 外部交付（成員 5） |
-| Step 3 | MSE/SSIM vs ε 曲線、DP-vs-NP 攻擊準確率對照 | ✅ 完成 |
+| Step 2 | CNN 架構 + 訓練 pipeline（train/val/test 6:2:2，best ckpt 由 val 挑） | ✅ 完成 |
+| Step 2 | Top-1/Top-5 評估（held-out test）+ 8 組攻擊實驗 + 對照表 | ✅ 完成 |
+| Step 3 | DP-Pixelization b∈{2,4,8,16} + 兩種 DP-Blur 機制（LP-Blur, DP-Blur-Split） | ✅ 完成 |
+| Step 3 | MSE/SSIM vs ε 曲線、DP-vs-NP 攻擊準確率對照（42 組） | ✅ 完成 |
 | 文件 | 最終報告（方法 + 結果 + 討論 + 分工表） | 🟡 規劃中（由成員 2 統整、排版） |
 
 詳細分工見 [`docs/division-of-labor.md`](docs/division-of-labor.md)。
@@ -53,8 +53,8 @@
 
 | 你是 | 直接拿 | 一定要看 |
 |---|---|---|
-| **成員 3、4（CNN 攻擊）** | `data/deid/pixelized/pix_b{2,4,8,16}/`、`data/deid/blurred/blur_k{15,45,99}/`（已從真實 ORL 產好；結構同 ORL、檔名一一對應）、`data/splits/split_train.json` / `data/splits/split_test.json`（標準切分）、`checkpoints/{original,pix_b*,blur_k*}.pth`（已訓練好的 8 個模型） | `docs/division-of-labor.md` 的「交付對接備註」、`src/facedeid/dataset_loader.py`（用 `DatasetIndex.from_att(...)` + `stratified_split(..., seed=42)`，**8 組各自獨立訓練、不可混訓**） |
-| **成員 5（差分隱私）** | `data/dp/{dp_pix_b8,dp_pix_b16,dp_blur}/eps*/`（已產好的 DP 影像）、`data/dp/metrics.csv`（MSE/SSIM）、`checkpoints/dp_*.pth`（21 個 DP 攻擊模型） | 本 repo 使用 `scripts/train_evaluate_dp.py` 重跑 CNN attack，結果整理於 `docs/dp-attack-results.md` |
+| **成員 3、4（CNN 攻擊）** | `data/deid/pixelized/pix_b{2,4,8,16}/`、`data/deid/blurred/blur_k{15,45,99}/`、`data/splits/split_{train,val,test}.json`（6:2:2 切分）、`checkpoints/{original,pix_b*,blur_k*}.pth`（8 個 Step 2 模型） | `docs/division-of-labor.md` 的「交付對接備註」、`src/facedeid/dataset_loader.py`（用 `DatasetIndex.from_att(...)` + `stratified_split_3way(..., seed=42)`）。**8 組各自獨立訓練，best ckpt 由 val acc 挑，test 全程 held-out** |
+| **成員 5（差分隱私）** | `data/dp/{dp_pix_b{2,4,8,16},lp_blur,dp_blur_split}/`（42 組 DP 影像）、`data/dp/metrics.csv`、`checkpoints/dp_*.pth`（42 個 DP 攻擊模型） | 本 repo 使用 `scripts/train_evaluate_dp.py` 跑 CNN attack，結果整理於 `docs/dp-attack-results.md` |
 | 想了解全貌 | — | 本 README 的「總覽」「專案架構」、`docs/division-of-labor.md` |
 
 > 跑法：`uv sync` 之後 `./scripts/run_pixelize.sh` / `./scripts/run_blur.sh` 可重建 `data/deid/`；`uv run pytest` 跑煙霧測試。新增的去識別化變體一律沿用 `seed=42` 的切分。
@@ -214,15 +214,35 @@ face-deid-hw3/
 
 ---
 
+## Caveats（須在報告中誠實揭露）
+
+### N=80 的統計侷限
+
+ORL 一共 400 張影像、每 class 10 張，切分 6:2:2 後 test set 只剩 80 張（每 class 2 張）。**單一預測誤差 = 1.25 個百分點。** 因此：
+
+- 跨 dataset 之間 5–10pp 的 Top-1 差異還在 4–8 筆預測之內，方向性可解讀但**不適合宣告嚴格單調趨勢**。
+- 可靠的結論：「在所有去識別化參數下 CNN Top-1 都遠優於 1/40 隨機猜測」。
+- LP-Blur ε=0.5 的 Top-1=0.5375 是這個樣本量下的明顯 outlier；其他 6 個 ε 都在 0.84–0.89。MPS 上 PyTorch 的 non-determinism 讓跨 run 差個 5–10pp 是正常範圍。
+
+### DP-Blur-Split 的 sensitivity bound 比理論最緊更保守
+
+實作用 `Laplace(scale = 255·k²/ε)`，相當於把單一 output pixel 的 sensitivity 假設為 255。**理論最緊的 bound 是 max kernel weight × 255**，對 Gaussian kernel 約等於 `0.18·255 ≈ 46`。我們選用較大的 scale 是為了**保證嚴格 ε-DP**——更多的雜訊不會破壞 DP 保證、只會犧牲更多 utility。報告中可說「我們以可證明的保守上界實作；緊上界版本會給出較好的 utility 但需要更小心的證明」。
+
+### DP-Pix 用的是 cell-mean 機制（parallel composition）
+
+不是 Fan 2018 完整版的 m-neighborhood mechanism。對 ORL 已 cropped 的人臉而言，這個簡化版的 sensitivity `255/b²` 是 m=1 時的特例，足以呈現 privacy-utility trade-off 並比較 b 值的影響。
+
+---
+
 ## 貢獻
 
 本專案為五人分組作業，分工如下（完整交付清單見 [`docs/division-of-labor.md`](docs/division-of-labor.md)）：
 
 1. **成員 1** — 資料集前置、人臉偵測、Pixelization（b=2,4,8,16）：`dataset_loader.py`、`face_detector.py`、`pixelize.py`、`run_pixelize.sh`、視覺比較圖、資料集說明。
 2. **成員 2** — Gaussian Blurring（k=15,45,99）、報告整合、最終打包：`gaussian_blur.py`、`run_blur.sh`、視覺比較圖、最終報告（規劃/排版）、本 repo 整理。
-3. **成員 3** — CNN 架構與訓練 pipeline（每組去識別化參數獨立訓練）：`model.py`、`train.py`、`config.yaml`、訓練 log、各參數 `.pth`。
-4. **成員 4** — CNN 評估與攻擊實驗：`evaluate.py`（Top-1/Top-5）、8 組攻擊結果對照表、攻擊分析。
-5. **成員 5** — 差分隱私：外部提供 DP 影像資料集、`metrics.csv`、MSE/SSIM 曲線與敏感度推導文件；本 repo 已完成 DP-vs-NP CNN attack 對照表。
+3. **成員 3** — CNN 架構與訓練 pipeline（train/val/test 三切、每組去識別化參數獨立訓練）：`model.py`、`train.py`、`config.yaml`、訓練 log、各參數 `.pth`。
+4. **成員 4** — CNN 評估與攻擊實驗：`evaluate.py`（Top-1/Top-5）、Step 2 八組 + Step 3 四十二組攻擊結果對照表、攻擊分析。
+5. **成員 5** — 差分隱私：DP 影像資料集（DP-Pix b∈{2,4,8,16}、LP-Blur、DP-Blur-Split）、`metrics.csv`、MSE/SSIM 曲線、敏感度推導文件；本 repo 包含完整 DP-vs-NP CNN attack 對照表。
 
 提交前請確認：
 
