@@ -1,11 +1,4 @@
-"""facedeid — 人臉去識別化工具組(HW3)。
-
-模組:
-  * dataset_loader : 統一資料載入 / stratified train-test split(seed=42)
-  * face_detector  : 人臉偵測(Haar Cascade / dlib HOG+SVM)
-  * pixelize       : Pixelization 去識別化(b×b 區塊取平均)
-  * gaussian_blur  : Gaussian Blurring 去識別化(k×k 高斯核卷積)
-"""
+"""facedeid: face de-identification helpers for HW3."""
 
 from .dataset_loader import (
     DatasetIndex,

@@ -1,15 +1,4 @@
-"""
-make_detect_pixelize_demo.py
-----------------------------
-展示「先偵測人臉 → 只對 bbox 區域做去識別化」的 pipeline,適用於 FaceScrub /
-CelebA / 其他含背景的影像。由於沒有 FaceScrub 樣本,這裡合成一張「人臉貼在
-背景上」的測試圖(實際使用時把 make_synthetic_scene() 換成讀 FaceScrub 任一張即可)。
-
-輸出到 figures/detect_pixelize_demo.png。
-
-用法(在專案根目錄執行):
-    uv run python scripts/make_detect_pixelize_demo.py
-"""
+"""Demo: detect face → pixelize only the bbox (for non-cropped inputs like FaceScrub)."""
 from __future__ import annotations
 
 import sys
@@ -29,7 +18,7 @@ OUT_DIR.mkdir(exist_ok=True)
 
 
 def make_synthetic_scene() -> np.ndarray:
-    """合成一張 256×256 場景:有紋理背景,中央貼一張放大的 synthetic ORL 人臉。"""
+    """256×256 textured background with an ORL face pasted in the center."""
     rng = np.random.RandomState(0)
     H = W = 256
     yy, xx = np.mgrid[0:H, 0:W]
@@ -39,7 +28,7 @@ def make_synthetic_scene() -> np.ndarray:
     face_path = PROJECT_ROOT / "data" / "att_faces" / "s1" / "1.pgm"
     face = cv2.imread(str(face_path), cv2.IMREAD_GRAYSCALE)
     if face is None:
-        raise FileNotFoundError(f"找不到 {face_path}(先跑 scripts/make_synthetic_orl.py 或放好真實 ORL)")
+        raise FileNotFoundError(f"missing {face_path}")
     face_big = cv2.resize(face, (120, 146), interpolation=cv2.INTER_LINEAR)
     fh, fw = face_big.shape
     cy, cx = (H - fh) // 2, (W - fw) // 2
@@ -51,7 +40,7 @@ def main() -> None:
     img = make_synthetic_scene()
     det = FaceDetector(backend="haar")
     boxes = det.detect(img, fallback_full=False)
-    print(f"偵測到 {len(boxes)} 張臉:{boxes}")
+    print(f"detected {len(boxes)} face(s): {boxes}")
 
     b_values = [4, 8, 16]
     fig, axes = plt.subplots(1, 2 + len(b_values), figsize=(3 * (2 + len(b_values)), 3))
@@ -72,7 +61,7 @@ def main() -> None:
     plt.tight_layout()
     out_png = OUT_DIR / "detect_pixelize_demo.png"
     plt.savefig(out_png, dpi=150, bbox_inches="tight")
-    print(f"demo 寫到:{out_png}")
+    print(f"saved: {out_png}")
 
 
 if __name__ == "__main__":

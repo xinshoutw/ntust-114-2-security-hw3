@@ -1,14 +1,4 @@
-"""
-make_pixelize_comparison.py
----------------------------
-產生作業 PDF 第 6 頁格式的視覺比較圖(Pixelization 版):
-    [orig | b=2 | b=4 | b=8 | b=16]
-
-每個 row 是同一個人(預設 4 row)。輸出到 figures/。
-
-用法(在專案根目錄執行):
-    uv run python scripts/make_pixelize_comparison.py
-"""
+"""Visual comparison grid: original vs Pixelization b∈{2,4,8,16}."""
 from __future__ import annotations
 
 import sys
@@ -32,13 +22,12 @@ IMG_EXTS = {".pgm", ".png", ".jpg", ".jpeg", ".bmp"}
 
 
 def _load_subject_image(subj: str):
-    """讀 subj/SAMPLE_INDEX.pgm,讀不到就退而用該資料夾第一張圖。"""
     cand = DATA_ROOT / subj / f"{SAMPLE_INDEX}.pgm"
     if cand.exists():
         return cv2.imread(str(cand), cv2.IMREAD_GRAYSCALE)
     imgs = sorted(p for p in (DATA_ROOT / subj).glob("*") if p.suffix.lower() in IMG_EXTS)
     if not imgs:
-        raise FileNotFoundError(f"{DATA_ROOT / subj} 底下找不到任何影像")
+        raise FileNotFoundError(f"no images under {DATA_ROOT / subj}")
     return cv2.imread(str(imgs[0]), cv2.IMREAD_GRAYSCALE)
 
 
@@ -66,9 +55,9 @@ def main() -> None:
     plt.tight_layout()
     out_png = OUT_DIR / "pixelize_comparison.png"
     plt.savefig(out_png, dpi=150, bbox_inches="tight")
-    print(f"視覺比較圖寫到:{out_png}")
+    print(f"saved: {out_png}")
 
-    # 單列版本
+    # Single-row version
     fig2, ax2 = plt.subplots(1, n_cols, figsize=(2.0 * n_cols, 2.4))
     orig = _load_subject_image(SAMPLE_SUBJECTS[0])
     ax2[0].imshow(orig, cmap="gray", vmin=0, vmax=255)
@@ -80,7 +69,7 @@ def main() -> None:
     plt.tight_layout()
     out_png2 = OUT_DIR / "pixelize_comparison_single_row.png"
     plt.savefig(out_png2, dpi=150, bbox_inches="tight")
-    print(f"單列版本寫到:{out_png2}")
+    print(f"saved: {out_png2}")
 
 
 if __name__ == "__main__":

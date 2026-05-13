@@ -214,23 +214,11 @@ face-deid-hw3/
 
 ---
 
-## Caveats（須在報告中誠實揭露）
+## Caveats
 
-### N=80 的統計侷限
-
-ORL 一共 400 張影像、每 class 10 張，切分 6:2:2 後 test set 只剩 80 張（每 class 2 張）。**單一預測誤差 = 1.25 個百分點。** 因此：
-
-- 跨 dataset 之間 5–10pp 的 Top-1 差異還在 4–8 筆預測之內，方向性可解讀但**不適合宣告嚴格單調趨勢**。
-- 可靠的結論：「在所有去識別化參數下 CNN Top-1 都遠優於 1/40 隨機猜測」。
-- LP-Blur ε=0.5 的 Top-1=0.5375 是這個樣本量下的明顯 outlier；其他 6 個 ε 都在 0.84–0.89。MPS 上 PyTorch 的 non-determinism 讓跨 run 差個 5–10pp 是正常範圍。
-
-### DP-Blur-Split 的 sensitivity bound 比理論最緊更保守
-
-實作用 `Laplace(scale = 255·k²/ε)`，相當於把單一 output pixel 的 sensitivity 假設為 255。**理論最緊的 bound 是 max kernel weight × 255**，對 Gaussian kernel 約等於 `0.18·255 ≈ 46`。我們選用較大的 scale 是為了**保證嚴格 ε-DP**——更多的雜訊不會破壞 DP 保證、只會犧牲更多 utility。報告中可說「我們以可證明的保守上界實作；緊上界版本會給出較好的 utility 但需要更小心的證明」。
-
-### DP-Pix 用的是 cell-mean 機制（parallel composition）
-
-不是 Fan 2018 完整版的 m-neighborhood mechanism。對 ORL 已 cropped 的人臉而言，這個簡化版的 sensitivity `255/b²` 是 m=1 時的特例，足以呈現 privacy-utility trade-off 並比較 b 值的影響。
+- **N=80**：每 class 2 張 test image，1 筆預測 = 1.25pp。跨 dataset 5–10pp 差距方向性可信，但不適合宣告嚴格單調趨勢。LP-Blur ε=0.5 = 0.5375 是 MPS 抖動造成的 outlier，其他 6 個 ε 都在 0.84–0.89。
+- **DP-Blur-Split sensitivity bound**：實作以 `255·k²/ε` 作 Laplace scale，等於把單一 output pixel 的 sensitivity 假設為 255。緊上界約 `0.18·255 ≈ 46`，我們選用較寬的上界確保嚴格 ε-DP 成立，代價是多一點雜訊。
+- **DP-Pix 採 cell-mean 機制（m=1）**：sensitivity `255/b²` 是 Fan 2018 m-neighborhood mechanism 在 m=1 的特例。對 ORL 已 cropped 的人臉夠用，可呈現 privacy-utility trade-off。
 
 ---
 

@@ -1,4 +1,4 @@
-"""最小煙霧測試:確認去識別化函式的形狀/型別/邊界行為正確。"""
+"""Smoke tests for de-identification functions (shape, dtype, monotonicity, errors)."""
 from __future__ import annotations
 
 import numpy as np
@@ -24,7 +24,6 @@ def test_pixelize_b1_is_identity(gray_img: np.ndarray) -> None:
 
 
 def test_pixelize_larger_b_loses_more_detail(gray_img: np.ndarray) -> None:
-    # b 越大 → 與原圖差異越大(去識別化越強)
     diff_small = float(np.mean(np.abs(gray_img.astype(int) - pixelize(gray_img, b=2))))
     diff_large = float(np.mean(np.abs(gray_img.astype(int) - pixelize(gray_img, b=16))))
     assert diff_large > diff_small
@@ -42,7 +41,6 @@ def test_gaussian_blur_preserves_shape_and_dtype(gray_img: np.ndarray) -> None:
 
 
 def test_gaussian_blur_even_k_is_normalized(gray_img: np.ndarray) -> None:
-    # 偶數 k 會被 +1 成奇數;結果應與 k+1 相同
     np.testing.assert_array_equal(gaussian_blur(gray_img, k=44), gaussian_blur(gray_img, k=45))
 
 

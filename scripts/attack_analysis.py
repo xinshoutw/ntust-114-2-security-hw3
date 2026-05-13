@@ -1,18 +1,4 @@
-"""Per-class attack analysis for Step 2 CNN re-identification attacks.
-
-Extends the aggregate Top-1 / Top-5 numbers in scripts/evaluate.py with:
-
-  - per-class Top-1 accuracy (40 classes × 8 datasets)
-  - per-dataset 40×40 confusion matrix heatmap
-  - cross-dataset per-class Top-1 heatmap (8 × 40)
-  - "hardest classes" report — which subjects are misidentified across many datasets
-
-This is the data backbone for the deeper discussion in docs/attack-analysis.md.
-
-Examples:
-    uv run --extra attack python scripts/attack_analysis.py --device auto
-    uv run --extra attack python scripts/attack_analysis.py --datasets original blur_k99
-"""
+"""Per-class attack analysis (per-class Top-1, cross-dataset heatmap, hardest classes)."""
 
 from __future__ import annotations
 
@@ -36,7 +22,6 @@ def collect_predictions(
     loader: DataLoader,
     device: torch.device,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Run inference on `loader` and return (predicted_top1, true_label) numpy arrays."""
     model.eval()
     preds: list[np.ndarray] = []
     trues: list[np.ndarray] = []
@@ -97,12 +82,7 @@ def save_per_class_csv(
             ])
 
 
-def save_confusion_heatmap(
-    cm: np.ndarray,
-    output_path: Path,
-    title: str,
-) -> None:
-    """40×40 confusion heatmap. Mostly diagonal for ~90% acc; off-diagonal cells reveal twin pairs."""
+def save_confusion_heatmap(cm: np.ndarray, output_path: Path, title: str) -> None:
     fig, ax = plt.subplots(figsize=(8, 8))
     im = ax.imshow(cm, cmap="viridis", aspect="equal")
     ax.set_xlabel("Predicted class id")
@@ -120,7 +100,6 @@ def save_per_class_heatmap(
     dataset_names: list[str],
     output_path: Path,
 ) -> None:
-    """Cross-dataset per-class accuracy heatmap. Shape: (num_datasets, num_classes)."""
     fig, ax = plt.subplots(figsize=(16, 5))
     im = ax.imshow(acc_matrix, cmap="RdYlGn", aspect="auto", vmin=0, vmax=1)
     ax.set_yticks(range(len(dataset_names)))
@@ -143,7 +122,6 @@ def report_hardest_classes(
     output_path: Path,
     top_n: int = 10,
 ) -> list[tuple[int, str, float]]:
-    """Rank classes by mean Top-1 across all datasets and save the bottom-N as a CSV."""
     mean_acc = acc_matrix.mean(axis=0)
     order = np.argsort(mean_acc)
     hardest: list[tuple[int, str, float]] = []
@@ -164,23 +142,18 @@ def report_hardest_classes(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Per-class attack analysis for Step 2 CNN attacks.")
+    parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--checkpoint-dir", default="checkpoints")
-    parser.add_argument("--datasets", nargs="*", default=list(DATASETS),
-                        help="Subset of dataset names to analyze. Defaults to all 8.")
-    parser.add_argument("--report-dir", default="reports/per_class",
-                        help="Per-dataset per-class CSV output directory.")
-    parser.add_argument("--figure-dir", default=None,
-                        help="Optional per-dataset confusion-matrix PNG output directory. "
-                             "Disabled by default because with 2 test samples per class the "
-                             "40x40 matrices are visually indistinguishable across datasets.")
+    parser.add_argument("--datasets", nargs="*", default=list(DATASETS))
+    parser.add_argument("--report-dir", default="reports/per_class")
+    # 40x40 confusion matrices look identical across datasets with only 2 test
+    # samples/class, so we skip them unless --figure-dir is set explicitly.
+    parser.add_argument("--figure-dir", default=None)
     parser.add_argument("--summary-csv", default="reports/per_class_summary.csv",
-                        help="Combined per-class CSV across all selected datasets.")
-    parser.add_argument("--heatmap-png", default="figures/per_class_top1_heatmap.png",
-                        help="Cross-dataset per-class accuracy heatmap output.")
-    parser.add_argument("--hardest-csv", default="reports/hardest_classes.csv",
-                        help="Ranked hardest classes (lowest mean Top-1 across all datasets).")
+                        )
+    parser.add_argument("--heatmap-png", default="figures/per_class_top1_heatmap.png")
+    parser.add_argument("--hardest-csv", default="reports/hardest_classes.csv")
     parser.add_argument("--top-n-hardest", type=int, default=10)
     parser.add_argument("--device", default=None, choices=["auto", "cuda", "mps", "cpu"])
     args = parser.parse_args()
@@ -202,10 +175,7 @@ def main() -> None:
         dataset_root = DATASETS[name]
         checkpoint_path = checkpoint_dir / f"{name}.pth"
         if not checkpoint_path.exists():
-            raise FileNotFoundError(
-                f"Missing checkpoint: {checkpoint_path}. "
-                "Train it first via scripts/train_all.py."
-            )
+            raise FileNotFoundError(f"missing checkpoint: {checkpoint_path}")
 
         checkpoint = load_checkpoint(checkpoint_path, device)
         _, test_loader, label_to_name = build_loaders(

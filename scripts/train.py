@@ -1,11 +1,4 @@
-"""Train one CNN classifier on one dataset variant.
-
-Example:
-    uv run --extra attack python scripts/train.py \
-        --dataset-root data/deid/pixelized/pix_b8 \
-        --name pix_b8 \
-        --config config.yaml
-"""
+"""Train one CNN classifier on one dataset variant."""
 
 from __future__ import annotations
 
@@ -30,11 +23,7 @@ IMG_EXTS = [".png", ".pgm", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"]
 
 
 def load_config(path: str | Path) -> dict[str, Any]:
-    """Read the simple key-value config.yaml used by this homework.
-
-    The file only uses scalar values, so a small parser avoids adding another
-    dependency outside the existing uv optional attack group.
-    """
+    """Tiny scalar-only YAML reader to avoid adding a PyYAML dependency."""
     config: dict[str, Any] = {}
     with open(path, "r", encoding="utf-8") as file:
         for raw_line in file:
@@ -64,16 +53,6 @@ def set_seed(seed: int) -> None:
 
 
 def get_device(requested: str = "auto") -> torch.device:
-    """Return the training device.
-
-    auto:
-        Prefer CUDA, then Apple Metal/MPS, then CPU.
-    cuda/mps:
-        Require that GPU backend. If it is unavailable, fail loudly instead of
-        silently falling back to CPU.
-    cpu:
-        Force CPU training.
-    """
     requested = requested.lower()
     if requested == "auto":
         if torch.cuda.is_available():
@@ -81,28 +60,17 @@ def get_device(requested: str = "auto") -> torch.device:
         if torch.backends.mps.is_available():
             return torch.device("mps")
         return torch.device("cpu")
-
     if requested == "cuda":
         if not torch.cuda.is_available():
-            raise RuntimeError(
-                "CUDA was requested, but torch.cuda.is_available() is False. "
-                "Install a CUDA-enabled PyTorch build or use --device auto/cpu."
-            )
+            raise RuntimeError("CUDA not available")
         return torch.device("cuda")
-
     if requested == "mps":
         if not torch.backends.mps.is_available():
-            raise RuntimeError(
-                "MPS was requested, but torch.backends.mps.is_available() is False. "
-                "Run this on an Apple Silicon Mac with an MPS-enabled PyTorch build "
-                "or use --device auto/cpu."
-            )
+            raise RuntimeError("MPS not available")
         return torch.device("mps")
-
     if requested == "cpu":
         return torch.device("cpu")
-
-    raise ValueError("device must be one of: auto, cuda, mps, cpu")
+    raise ValueError(f"unknown device: {requested}")
 
 
 def load_split(path: str | Path) -> dict[str, Any]:
@@ -111,12 +79,7 @@ def load_split(path: str | Path) -> dict[str, Any]:
 
 
 def map_split_path(dataset_root: Path, split_path: str) -> Path:
-    """Map a split path like data/att_faces/s1/2.pgm to the chosen dataset root.
-
-    Step 1 outputs preserve the ORL subject/file structure but may change the
-    extension from .pgm to .png. This function keeps the subject and stem, then
-    finds the existing file under dataset_root.
-    """
+    """Map data/att_faces/s1/2.pgm to dataset_root/s1/2.{png,pgm,...}."""
     original = Path(split_path)
     subject = original.parent.name
     stem = original.stem
@@ -168,11 +131,7 @@ def build_loaders(
     device: torch.device,
     val_split: str | Path | None = None,
 ) -> tuple[DataLoader, DataLoader, dict[int, str]] | tuple[DataLoader, DataLoader, DataLoader, dict[int, str]]:
-    """Build DataLoaders.
-
-    Without ``val_split`` (legacy): returns ``(train_loader, test_loader, label_to_name)``.
-    With ``val_split``: returns ``(train_loader, val_loader, test_loader, label_to_name)``.
-    """
+    """Without val_split: (train, test, labels). With val_split: (train, val, test, labels)."""
     train_dataset = SplitImageDataset(dataset_root, train_split, int(config["image_size"]))
     test_dataset = SplitImageDataset(dataset_root, test_split, int(config["image_size"]))
 
@@ -289,19 +248,14 @@ def save_checkpoint(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train a CNN on one de-identified dataset.")
-    parser.add_argument("--dataset-root", required=True, help="Dataset root, e.g. data/deid/pixelized/pix_b8.")
-    parser.add_argument("--name", required=True, help="Name used for checkpoint/log files.")
-    parser.add_argument("--config", default="config.yaml", help="Training config path.")
-    parser.add_argument("--train-split", default=None, help="Defaults to config train_split.")
-    parser.add_argument("--val-split", default=None, help="Defaults to config val_split.")
-    parser.add_argument("--test-split", default=None, help="Defaults to config test_split.")
-    parser.add_argument(
-        "--device",
-        default=None,
-        choices=["auto", "cuda", "mps", "cpu"],
-        help="Training device. Defaults to config device, then auto.",
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset-root", required=True)
+    parser.add_argument("--name", required=True)
+    parser.add_argument("--config", default="config.yaml")
+    parser.add_argument("--train-split", default=None)
+    parser.add_argument("--val-split", default=None)
+    parser.add_argument("--test-split", default=None)
+    parser.add_argument("--device", default=None, choices=["auto", "cuda", "mps", "cpu"])
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -311,9 +265,7 @@ def main() -> None:
     val_split = args.val_split or config.get("val_split")
     test_split = args.test_split or config["test_split"]
     if not val_split:
-        raise ValueError(
-            "val_split is required. Set 'val_split' in config.yaml or pass --val-split."
-        )
+        raise ValueError("val_split required (set in config.yaml or pass --val-split)")
     checkpoint_dir = Path(str(config.get("checkpoint_dir", "checkpoints")))
     log_dir = Path(str(config.get("log_dir", "logs")))
 
@@ -367,7 +319,7 @@ def main() -> None:
             ],
         )
 
-        # Best-checkpoint selection uses VAL accuracy only — test set stays held out.
+        # Best-ckpt by val acc only; test set stays held out.
         if val_acc >= best_val_acc:
             best_val_acc = val_acc
             save_checkpoint(output_path, model, label_to_name, config, epoch, best_val_acc)

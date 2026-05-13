@@ -1,4 +1,4 @@
-"""CNN model used for Step 2 re-identification attacks."""
+"""CNN classifier for Step 2 re-identification attacks."""
 
 from __future__ import annotations
 
@@ -7,13 +7,6 @@ import torch.nn as nn
 
 
 class SimpleCNN(nn.Module):
-    """A compact CNN classifier for ORL face identity recognition.
-
-    The model intentionally starts simple: three Conv/ReLU/MaxPool blocks followed
-    by a small classifier. AdaptiveAvgPool keeps it compatible with different
-    input sizes such as 92x112 ORL images or resized square images.
-    """
-
     def __init__(self, num_classes: int):
         super().__init__()
 

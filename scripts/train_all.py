@@ -21,20 +21,15 @@ DATASETS = {
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train all Step 2 attack models independently.")
-    parser.add_argument("--config", default="config.yaml", help="Training config path.")
-    parser.add_argument("--datasets", nargs="*", default=list(DATASETS), help="Dataset names to train.")
-    parser.add_argument(
-        "--device",
-        default=None,
-        choices=["auto", "cuda", "mps", "cpu"],
-        help="Training device passed to scripts/train.py.",
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="config.yaml")
+    parser.add_argument("--datasets", nargs="*", default=list(DATASETS))
+    parser.add_argument("--device", default=None, choices=["auto", "cuda", "mps", "cpu"])
     args = parser.parse_args()
 
     for dataset_name in args.datasets:
         if dataset_name not in DATASETS:
-            raise ValueError(f"Unknown dataset {dataset_name!r}. Choices: {', '.join(DATASETS)}")
+            raise ValueError(f"unknown dataset {dataset_name!r}")
 
         dataset_root = Path(DATASETS[dataset_name])
         if not dataset_root.exists():

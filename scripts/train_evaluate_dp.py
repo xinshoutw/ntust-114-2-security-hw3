@@ -1,15 +1,4 @@
-"""Train and evaluate CNN attacks on the DP datasets stored in data/dp/.
-
-Covers four method families × 7 epsilon values:
-
-* dp_pix_b8       data/dp/dp_pix_b8/eps{0.1..5.0}/
-* dp_pix_b16      data/dp/dp_pix_b16/eps{0.1..5.0}/
-* lp_blur         data/dp/lp_blur/k45_eps{0.1..5.0}/        (k fixed at 45)
-* dp_blur_split   data/dp/dp_blur_split/k45_eps{0.1..5.0}/  (k fixed at 45)
-
-Each (method, epsilon) is trained independently, matching the Step 2 protocol
-(SimpleCNN, SGD, 100 epoch, best-checkpoint selected by validation accuracy).
-"""
+"""Train and evaluate CNN attacks on the DP datasets in data/dp/."""
 
 from __future__ import annotations
 
@@ -63,25 +52,16 @@ def train_one(name: str, dataset_root: Path, config_path: str, device: str | Non
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train/evaluate all DP CNN attack datasets.")
-    parser.add_argument("--root", default="data/dp", help="DP dataset root.")
-    parser.add_argument("--blur-k", type=int, default=BLUR_K_DEFAULT, help="Blur kernel size for LP-Blur/DP-Blur-Split datasets.")
-    parser.add_argument("--config", default="config.yaml", help="Training config path.")
-    parser.add_argument("--output", default="reports/dp_evaluation.csv", help="Evaluation CSV output.")
-    parser.add_argument("--datasets", nargs="*", default=None, help="Optional DP dataset names to run.")
-    parser.add_argument("--skip-train", action="store_true", help="Only evaluate existing checkpoints.")
-    parser.add_argument("--skip-eval", action="store_true", help="Only train checkpoints.")
-    parser.add_argument(
-        "--skip-existing",
-        action="store_true",
-        help="Skip training for datasets whose checkpoint file already exists.",
-    )
-    parser.add_argument(
-        "--device",
-        default=None,
-        choices=["auto", "cuda", "mps", "cpu"],
-        help="Device passed to train.py and evaluate.py.",
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", default="data/dp")
+    parser.add_argument("--blur-k", type=int, default=BLUR_K_DEFAULT)
+    parser.add_argument("--config", default="config.yaml")
+    parser.add_argument("--output", default="reports/dp_evaluation.csv")
+    parser.add_argument("--datasets", nargs="*", default=None)
+    parser.add_argument("--skip-train", action="store_true")
+    parser.add_argument("--skip-eval", action="store_true")
+    parser.add_argument("--skip-existing", action="store_true")
+    parser.add_argument("--device", default=None, choices=["auto", "cuda", "mps", "cpu"])
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -105,7 +85,7 @@ def main() -> None:
         checkpoint_path = checkpoint_dir / f"{name}.pth"
         if not args.skip_train:
             if args.skip_existing and checkpoint_path.exists():
-                print(f"skip-existing: {name} already trained at {checkpoint_path}")
+                print(f"skip-existing: {name}")
             else:
                 print(f"training {name}")
                 train_one(name, dataset_root, args.config, args.device)

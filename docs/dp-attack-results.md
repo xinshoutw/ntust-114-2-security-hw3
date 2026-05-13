@@ -122,16 +122,11 @@ uv run --extra attack python scripts/plot_curves.py    # 重畫兩張 DP 曲線
 
 ## Analysis
 
-故事完整：
+- **DP-Pix 呈現清晰的 privacy-utility 曲線**：b=2 在 ε=0.1 把攻擊壓到 8.75%（接近隨機 2.5%），ε 升到 5 回爬到 88.75%。較大的 b 在低 ε 時保護較弱（sensitivity 255/b² 較小、所需 noise 較少），但 utility 較高。
+- **LP-Blur 沒有 DP 保護**：noise σ 在 k=45 下只有 ~0.18，遠小於像素範圍。ε 不影響輸出、攻擊準確率穩定在 ~85%。作為「naive blur+noise」對照組。
+- **DP-Blur-Split 嚴格 DP 但 utility 歸零**：scale = 255·k²/ε，影像被噪音淹沒（SSIM=0.003），CNN 攻擊 ≈ 隨機。Strict DP 需要的雜訊量直接抹掉所有可辨識訊號。
 
-1. **DP-Pix 提供清晰的 privacy-utility 曲線**。`b=2` 在 ε=0.1 把攻擊壓到 8.75%（接近隨機 2.5%）；ε 升到 5 後重新爬回 88.75%。較大的 b 在低 ε 時保護較弱（sensitivity = 255/b² 小、需要的 noise 少），但 utility 較好（影像可看性高）。**這就是 ε-DP 的核心 trade-off。**
+## Caveats
 
-2. **LP-Blur 是「假 DP」的負面教材**。它的 ε 完全不影響輸出（noise σ 比像素範圍小 1000 倍）、攻擊準確率穩定在 ~85%。寫進報告當對照組，說明「加了 Laplace noise 不等於提供了 DP 保護」。
-
-3. **DP-Blur-Split 是「嚴格 DP 的代價」**。每 output pixel 配 budget ε/k² 後，scale 變成 255·k²/ε，影像被噪音淹沒（SSIM=0.003）。CNN 攻擊跌到 0（甚至比隨機猜更低，因為模型甚至連 priors 都學不到），但**沒有人類能看出這是誰**——utility 全沒。這是純 DP 機制的工程代價。
-
-4. **Step 1 → Step 2 → Step 3 的故事閉環**：傳統 pixelize/blur 擋不住 CNN（Step 2 平均 Top-1 ≥ 76%）→ DP-Pix b=2 在 ε=0.1 把攻擊壓到隨機 → 但 utility 也大幅犧牲（SSIM=0.012）。報告可在 Step 3 結尾以此 trade-off 收。
-
-## Caveat: N=80 與 MPS 抖動
-
-每組 DP 攻擊只有 80 張 test image。**LP-Blur ε=0.5 = 0.5375** 是 outlier（CNN 在 MPS 上 non-deterministic，相同 ε 跨 run 可能差 5-10pp）。報告中可註腳「LP-Blur 數字在 ε scan 上應視為 ~0.85 ± noise，個別 ε 點不適合單獨解讀」。
+- N=80：1 筆預測 = 1.25pp。LP-Blur ε=0.5 = 0.5375 是 outlier（MPS non-determinism），同方法其他 6 個 ε 都在 0.84-0.89；LP-Blur 應視為 ~0.85 ± noise。
+- DP-Blur-Split 的 255-per-output sensitivity 是寬鬆上界（緊上界約 0.18·255 ≈ 46）。本實作多加了一些雜訊以確保 ε-DP 嚴格成立。

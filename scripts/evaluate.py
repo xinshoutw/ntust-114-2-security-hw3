@@ -1,12 +1,4 @@
-"""Evaluate Step 2 CNN attack checkpoints with Top-1 and Top-5 accuracy.
-
-Examples:
-    uv run --extra attack python scripts/evaluate.py --all --device auto
-    uv run --extra attack python scripts/evaluate.py \
-        --dataset-root data/deid/pixelized/pix_b8 \
-        --checkpoint checkpoints/pix_b8.pth \
-        --name pix_b8
-"""
+"""Evaluate Step 2 CNN attack checkpoints (Top-1, Top-5)."""
 
 from __future__ import annotations
 
@@ -156,22 +148,17 @@ def print_table(rows: list[dict[str, Any]]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate CNN attack checkpoints.")
-    parser.add_argument("--config", default="config.yaml", help="Config path.")
-    parser.add_argument("--name", default=None, help="Dataset name for single-checkpoint evaluation.")
-    parser.add_argument("--dataset-root", default=None, help="Dataset root for single-checkpoint evaluation.")
-    parser.add_argument("--checkpoint", default=None, help="Checkpoint path for single-checkpoint evaluation.")
-    parser.add_argument("--all", action="store_true", help="Evaluate all default Step 2 datasets.")
-    parser.add_argument("--datasets", nargs="*", default=list(DATASETS), help="Dataset names used with --all.")
-    parser.add_argument("--output", default="reports/evaluation.csv", help="CSV output path.")
-    parser.add_argument("--train-split", default=None, help="Defaults to config train_split.")
-    parser.add_argument("--test-split", default=None, help="Defaults to config test_split.")
-    parser.add_argument(
-        "--device",
-        default=None,
-        choices=["auto", "cuda", "mps", "cpu"],
-        help="Evaluation device. Defaults to config device, then auto.",
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="config.yaml")
+    parser.add_argument("--name", default=None)
+    parser.add_argument("--dataset-root", default=None)
+    parser.add_argument("--checkpoint", default=None)
+    parser.add_argument("--all", action="store_true")
+    parser.add_argument("--datasets", nargs="*", default=list(DATASETS))
+    parser.add_argument("--output", default="reports/evaluation.csv")
+    parser.add_argument("--train-split", default=None)
+    parser.add_argument("--test-split", default=None)
+    parser.add_argument("--device", default=None, choices=["auto", "cuda", "mps", "cpu"])
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -204,7 +191,7 @@ def main() -> None:
             )
     else:
         if not (args.name and args.dataset_root and args.checkpoint):
-            raise SystemExit("Single evaluation requires --name, --dataset-root, and --checkpoint, or use --all.")
+            raise SystemExit("need --name, --dataset-root, --checkpoint (or --all)")
         rows.append(
             evaluate_one(
                 name=args.name,

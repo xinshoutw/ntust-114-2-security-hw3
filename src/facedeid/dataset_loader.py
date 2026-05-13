@@ -1,32 +1,4 @@
-"""
-dataset_loader.py
------------------
-統一的資料載入介面,給組員 3、4(訓練/評估 CNN)及組員 5(DP)使用。
-
-支援三種資料集:
-  * AT&T (ORL):結構為 ROOT/s1, s2, ..., s40,每個資料夾 10 張 .pgm
-  * FaceScrub:結構為 ROOT/<actor_name>/*.jpg|png(若使用者下載 cropped 版)
-  * 自訂目錄:任意 ROOT/<class_name>/*.{png,jpg,jpeg,bmp,pgm} 結構
-
-提供:
-  - DatasetIndex:列出所有 (image_path, label) 配對
-  - stratified_split:依 label 切 train/test
-  - load_image / load_batch:讀圖工具
-  - iter_dataset:逐張產生 (img_array, label, path)
-
-使用範例(訓練端):
-    from facedeid.dataset_loader import DatasetIndex, stratified_split, load_image
-    idx = DatasetIndex.from_att("/path/to/att_faces")
-    train, test = stratified_split(idx, test_ratio=0.2, seed=42)
-    for path, label in train.items:
-        img = load_image(path)         # numpy ndarray, uint8
-        ...
-
-設計原則:
-  - 不假設 PyTorch / TensorFlow,只回傳 numpy + path,讓下游自己包成 DataLoader
-  - label 一律從 0 開始的 int(原始 ORL 是 1-indexed,這裡轉成 0-indexed)
-  - 切分結果可以序列化(toJSON)讓所有組員的實驗用同一個 split
-"""
+"""DatasetIndex + stratified train/val/test split for ORL-style folders."""
 from __future__ import annotations
 
 import json
@@ -39,34 +11,26 @@ import cv2
 import numpy as np
 
 
-# ---- 副檔名 -----------------------------------------------------------------
 IMG_EXTS = {".pgm", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
 
 
-# ---- DatasetIndex -----------------------------------------------------------
 @dataclass
 class DatasetIndex:
-    """一個 dataset 的索引(image path + label)。"""
-
     items: list[tuple[str, int]] = field(default_factory=list)
     label_to_name: dict[int, str] = field(default_factory=dict)
     root: str = ""
 
-    # ---------- 產生器 ------------------------------------------------------
     @classmethod
     def from_att(cls, root: str | Path) -> "DatasetIndex":
-        """
-        AT&T (ORL):root/s1, s2, ..., s40,每個 10 張 .pgm。
-        label 從 0 開始,對應原始 s1 → 0、s2 → 1、...、s40 → 39。
-        """
+        """ORL: root/s1..s40, each with 10 PGMs. Labels: s1 → 0, ..., s40 → 39."""
         root = Path(root)
-        assert root.is_dir(), f"找不到 ORL 根目錄:{root}"
-        # 用 sX 後綴的數字排序,而非字串排序(避免 s10 排到 s2 前面)
+        assert root.is_dir(), f"ORL root not found: {root}"
+        # Numeric sort on the sX suffix so s10 comes after s2.
         subj_dirs = sorted(
             [d for d in root.iterdir() if d.is_dir() and d.name.startswith("s")],
             key=lambda d: int(d.name[1:]),
         )
-        assert subj_dirs, f"{root} 底下沒看到任何 sX 資料夾"
+        assert subj_dirs, f"no sX subdirs under {root}"
         items: list[tuple[str, int]] = []
         label_to_name: dict[int, str] = {}
         for label, sd in enumerate(subj_dirs):
@@ -78,14 +42,11 @@ class DatasetIndex:
 
     @classmethod
     def from_folders(cls, root: str | Path) -> "DatasetIndex":
-        """
-        通用版本:每個子資料夾 = 一個 class。
-        適用 FaceScrub、CelebA-by-identity、自製資料集。
-        """
+        """Generic: each subfolder is one class (FaceScrub, CelebA-by-identity, etc)."""
         root = Path(root)
-        assert root.is_dir(), f"找不到資料根目錄:{root}"
+        assert root.is_dir(), f"root not found: {root}"
         cls_dirs = sorted([d for d in root.iterdir() if d.is_dir()])
-        assert cls_dirs, f"{root} 底下沒有任何 class 資料夾"
+        assert cls_dirs, f"no class subdirs under {root}"
         items: list[tuple[str, int]] = []
         label_to_name: dict[int, str] = {}
         for label, cd in enumerate(cls_dirs):
@@ -113,24 +74,17 @@ class DatasetIndex:
     def load_json(cls, path: str | Path) -> "DatasetIndex":
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        # JSON 把 int key 轉成 str,要轉回來
+        # JSON converts int keys to str and tuples to lists — restore both.
         data["label_to_name"] = {int(k): v for k, v in data["label_to_name"].items()}
-        # tuple 也被轉成 list,還原
         data["items"] = [(p, int(lbl)) for p, lbl in data["items"]]
         return cls(**data)
 
 
-# ---- split ------------------------------------------------------------------
 def stratified_split(
     idx: DatasetIndex, test_ratio: float = 0.2, seed: int = 42
 ) -> tuple[DatasetIndex, DatasetIndex]:
-    """
-    依 label 做 stratified split。每個 class 都至少有 1 張在 test。
-    回傳 (train_index, test_index),兩者共用同一個 label_to_name。
-
-    例:ORL 每 class 有 10 張,test_ratio=0.2 → 2 張 test、8 張 train。
-    """
-    assert 0 < test_ratio < 1, "test_ratio 必須在 (0, 1) 之間"
+    """Stratified train/test split. Each class gets >= 1 sample in test."""
+    assert 0 < test_ratio < 1
     rng = random.Random(seed)
     by_label: dict[int, list[str]] = {}
     for path, label in idx.items:
@@ -155,15 +109,9 @@ def stratified_split_3way(
     test_ratio: float = 0.2,
     seed: int = 42,
 ) -> tuple[DatasetIndex, DatasetIndex, DatasetIndex]:
-    """
-    Stratified 3-way split: train / val / test。每個 class 都至少 1 張在 val、1 張在 test。
-
-    回傳 (train, val, test),三者共用同一個 label_to_name。
-
-    例：ORL 每 class 10 張、val_ratio=0.2、test_ratio=0.2 → 每 class 6 train、2 val、2 test。
-    """
-    assert 0 < val_ratio < 1 and 0 < test_ratio < 1, "val/test ratio 必須在 (0, 1)"
-    assert val_ratio + test_ratio < 1, "val + test 不可 >= 1,要留資料給 train"
+    """Stratified 3-way split. Each class gets >= 1 sample in val and test."""
+    assert 0 < val_ratio < 1 and 0 < test_ratio < 1
+    assert val_ratio + test_ratio < 1
     rng = random.Random(seed)
     by_label: dict[int, list[str]] = {}
     for path, label in idx.items:
@@ -177,9 +125,7 @@ def stratified_split_3way(
         n_test = max(1, int(round(n * test_ratio)))
         n_val = max(1, int(round(n * val_ratio)))
         if n_test + n_val >= n:
-            raise ValueError(
-                f"class {label} 樣本不夠分:n={n}, n_val={n_val}, n_test={n_test}"
-            )
+            raise ValueError(f"class {label}: not enough samples (n={n}, val={n_val}, test={n_test})")
         test_items.extend((p, label) for p in paths[:n_test])
         val_items.extend((p, label) for p in paths[n_test : n_test + n_val])
         train_items.extend((p, label) for p in paths[n_test + n_val :])
@@ -192,39 +138,29 @@ def stratified_split_3way(
     )
 
 
-# ---- load -------------------------------------------------------------------
 def load_image(path: str, grayscale: bool = True) -> np.ndarray:
-    """讀單張圖。預設灰階(因為 ORL 是灰階,實驗統一灰階較方便)。"""
     flag = cv2.IMREAD_GRAYSCALE if grayscale else cv2.IMREAD_COLOR
     img = cv2.imread(path, flag)
     if img is None:
-        raise FileNotFoundError(f"讀不到圖:{path}")
+        raise FileNotFoundError(f"cannot read image: {path}")
     return img
 
 
 def iter_dataset(
     idx: DatasetIndex, grayscale: bool = True
 ) -> Iterator[tuple[np.ndarray, int, str]]:
-    """逐張迭代 (img, label, path)。給批次處理用。"""
     for path, label in idx.items:
         yield load_image(path, grayscale=grayscale), label, path
 
 
-def load_batch(
-    paths: Iterable[str], grayscale: bool = True
-) -> np.ndarray:
-    """讀一批圖回 numpy array(N, H, W) 或 (N, H, W, 3)。要求所有圖同尺寸。"""
-    imgs = [load_image(p, grayscale=grayscale) for p in paths]
-    return np.stack(imgs, axis=0)
+def load_batch(paths: Iterable[str], grayscale: bool = True) -> np.ndarray:
+    return np.stack([load_image(p, grayscale=grayscale) for p in paths], axis=0)
 
 
-# ---- CLI smoke test --------------------------------------------------------
 if __name__ == "__main__":
     import sys
     root = sys.argv[1] if len(sys.argv) > 1 else "data/att_faces"
     idx = DatasetIndex.from_att(root)
-    print(f"載入 {len(idx)} 張、{idx.num_classes} 類 (root={idx.root})")
+    print(f"loaded {len(idx)} images, {idx.num_classes} classes (root={idx.root})")
     train, test = stratified_split(idx, test_ratio=0.2, seed=42)
-    print(f"train: {len(train)} 張、test: {len(test)} 張")
-    img, lab, p = next(iter_dataset(test))
-    print(f"sample test: shape={img.shape} label={lab} ({idx.label_to_name[lab]}) path={p}")
+    print(f"train: {len(train)}  test: {len(test)}")
