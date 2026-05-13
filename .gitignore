@@ -15,7 +15,7 @@ dist/
 # *.pth
 logs/
 plots/
-reports/
+# reports/
 outputs/for_cnn/
 
 # OS / editor

@@ -17,30 +17,32 @@ uv run --extra attack python scripts/summarize_logs.py --log-dir logs --output r
 
 ## Top-1 / Top-5 Accuracy
 
-下表是組員 4 在 M4 Pro / MPS 上以 `seed=42`、100 epoch 重跑 `scripts/train_all.py` 後，再以 `scripts/evaluate.py --all` 量測 8 組 best-epoch checkpoint 的結果。
+下表是以 `seed=42`、100 epoch 重跑 `scripts/train_all.py` 後，再以 `scripts/attack_analysis.py --all` 量測 8 組 best-epoch checkpoint 的結果（committed checkpoints 由 `chore(checkpoints)` 提供，可直接重現）。
 
-| Dataset | Top-1 Accuracy | Top-5 Accuracy | Test Loss | Test Samples | Best Epoch |
+| Dataset | Top-1 Accuracy | Top-5 Accuracy† | Test Loss† | Test Samples | Best Epoch† |
 |---|---:|---:|---:|---:|---:|
-| original | 0.9125 | 0.9875 | 0.3234 | 80 | 66 |
-| pix_b2 | 0.8875 | 1.0000 | 0.4328 | 80 | 73 |
-| pix_b4 | 0.9125 | 0.9875 | 0.3491 | 80 | 95 |
+| original | 0.9000 | 0.9875 | 0.3234 | 80 | 66 |
+| pix_b2 | 0.9250 | 1.0000 | 0.4328 | 80 | 73 |
+| pix_b4 | 0.9000 | 0.9875 | 0.3491 | 80 | 95 |
 | pix_b8 | 0.9125 | 1.0000 | 0.3469 | 80 | 77 |
 | pix_b16 | 0.9000 | 0.9750 | 0.5703 | 80 | 87 |
-| blur_k15 | 0.9000 | 0.9875 | 0.4382 | 80 | 83 |
-| blur_k45 | 0.9125 | 1.0000 | 0.4785 | 80 | 97 |
-| blur_k99 | 0.8500 | 0.9875 | 0.5482 | 80 | 84 |
+| blur_k15 | 0.9125 | 0.9875 | 0.4382 | 80 | 83 |
+| blur_k45 | 0.8875 | 1.0000 | 0.4785 | 80 | 97 |
+| blur_k99 | 0.8625 | 0.9875 | 0.5482 | 80 | 84 |
 
-> MPS 在 PyTorch 上不是完全 deterministic，數字會在 ±3pp（≤ 3 筆預測）內抖動。本表為單一 run（`seed=42`）的結果；趨勢結論在多 run 下仍成立。
+> Top-1 為 `scripts/attack_analysis.py` 對 committed checkpoints 的最新量測值。†Top-5 / Test Loss / Best Epoch 沿用前一次 `scripts/evaluate.py --all` 的紀錄，若 checkpoints 換新需重跑 `evaluate.py` 才會同步。
+>
+> PyTorch 在 MPS / CPU 上不是完全 deterministic，數字會在 ±3pp（≤ 3 筆預測）內抖動。本表為單一 run（`seed=42`）的結果；趨勢結論在多 run 下仍成立。
 
 ## Analysis（短版）
 
-隨機猜測 40 類的 Top-1 ≈ 1/40 = 2.5%、Top-5 ≈ 12.5%。實驗結果顯示，即使經過 Pixelization 或 Gaussian Blur，CNN 仍能取得 **85% 至 91.25%** 的 Top-1（**至少 34× 隨機**），代表傳統去識別化基本無法阻止 AI 重識別攻擊。
+隨機猜測 40 類的 Top-1 ≈ 1/40 = 2.5%、Top-5 ≈ 12.5%。實驗結果顯示，即使經過 Pixelization 或 Gaussian Blur，CNN 仍能取得 **86.25% 至 92.50%** 的 Top-1（**至少 34× 隨機**），代表傳統去識別化基本無法阻止 AI 重識別攻擊。
 
-Gaussian Blur 隨 k 變大整體趨於下降，最強的 `blur_k99` Top-1 = 85.00%、Test Loss 0.55，是 8 組中最低的攻擊準確率；模型對強模糊影像的信心顯著降低。
+Gaussian Blur 隨 k 變大整體趨於下降，最強的 `blur_k99` Top-1 = 86.25%、Test Loss 0.55，是 8 組中最低的攻擊準確率；模型對強模糊影像的信心顯著降低。
 
-Pixelization 在 ORL 上**沒有呈現嚴格單調下降**——所有 4 組 Top-1 都落在 88.75-91.25% 區間。這指向 ORL 的識別線索集中在低頻訊號（整體輪廓、髮量、頭顱形狀），而 pixelization 本質上就是低通濾波，保留了大部分低頻成分。
+Pixelization 在 ORL 上**沒有呈現嚴格單調下降**——所有 4 組 Top-1 都落在 90.00-92.50% 區間。這指向 ORL 的識別線索集中在低頻訊號（整體輪廓、髮量、頭顱形狀），而 pixelization 本質上就是低通濾波，保留了大部分低頻成分。
 
-整體最低 Top-1 仍維持在 85% 以上，距離隨機猜測差兩個數量級，**這正是 Step 3 引入 ε-DP 的動機**。
+整體最低 Top-1 仍維持在 86% 以上，距離隨機猜測差兩個數量級，**這正是 Step 3 引入 ε-DP 的動機**。
 
 > 完整的「為什麼」分析（per-dataset 解讀、pix 不單調原因、blur 單調原因、N=80 統計侷限、為什麼仍需要 Step 3 DP、訓練曲線觀察、最終報告建議）見 [`attack-analysis.md`](attack-analysis.md)。
 
