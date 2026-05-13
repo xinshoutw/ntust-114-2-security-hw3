@@ -171,8 +171,10 @@ def main() -> None:
                         help="Subset of dataset names to analyze. Defaults to all 8.")
     parser.add_argument("--report-dir", default="reports/per_class",
                         help="Per-dataset per-class CSV output directory.")
-    parser.add_argument("--figure-dir", default="figures/confusion",
-                        help="Per-dataset confusion-matrix PNG output directory.")
+    parser.add_argument("--figure-dir", default=None,
+                        help="Optional per-dataset confusion-matrix PNG output directory. "
+                             "Disabled by default because with 2 test samples per class the "
+                             "40x40 matrices are visually indistinguishable across datasets.")
     parser.add_argument("--summary-csv", default="reports/per_class_summary.csv",
                         help="Combined per-class CSV across all selected datasets.")
     parser.add_argument("--heatmap-png", default="figures/per_class_top1_heatmap.png",
@@ -229,11 +231,12 @@ def main() -> None:
             Path(args.report_dir) / f"{name}.csv",
         )
         overall_top1 = float((preds == trues).mean())
-        save_confusion_heatmap(
-            cm,
-            Path(args.figure_dir) / f"{name}_confusion.png",
-            title=f"Confusion matrix — {name} (Top-1 = {overall_top1:.4f})",
-        )
+        if args.figure_dir:
+            save_confusion_heatmap(
+                cm,
+                Path(args.figure_dir) / f"{name}_confusion.png",
+                title=f"Confusion matrix — {name} (Top-1 = {overall_top1:.4f})",
+            )
 
         n_perfect = int(np.sum((total > 0) & (accs == 1.0)))
         n_zero = int(np.sum((total > 0) & (accs == 0.0)))

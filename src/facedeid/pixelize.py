@@ -22,8 +22,8 @@ Pixelization 主程式。
     out = pixelize(img, b=8)
 
     # CLI:批次處理整個資料夾(在專案根目錄用 uv run)
-    uv run python -m facedeid.pixelize --input data/att_faces --output outputs/pixelized/pix_b8 --b 8
-    uv run python -m facedeid.pixelize --input data/celeb --output outputs/celeb_pix_b8 --b 8 --detect-faces
+    uv run python -m facedeid.pixelize --input data/att_faces --output data/deid/pixelized/pix_b8 --b 8
+    uv run python -m facedeid.pixelize --input data/celeb --output data/deid/celeb_pix_b8 --b 8 --detect-faces
 """
 from __future__ import annotations
 

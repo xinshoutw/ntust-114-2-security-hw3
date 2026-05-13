@@ -79,7 +79,7 @@ Pixelization 的區塊在邊界是斷裂的（每個 b×b 內取平均），但*
 
 ## 3.5 Per-class 觀察：哪些人最難被 CNN 認出？
 
-`scripts/attack_analysis.py` 對每組 checkpoint 計算 40 類 per-class Top-1，並把結果橫向比較。完整資料在 `reports/per_class_summary.csv`，跨資料集熱圖在 `figures/per_class_top1_heatmap.png`，每組的 40×40 confusion matrix 在 `figures/confusion/`。
+`scripts/attack_analysis.py` 對每組 checkpoint 計算 40 類 per-class Top-1，並把結果橫向比較。完整資料在 `reports/per_class_summary.csv`，跨資料集熱圖在 `figures/per_class_top1_heatmap.png`。每組 8×40 的視覺呈現直接看熱圖即可——40×40 confusion matrix 因為 test set 只有 2 筆/class，跨資料集差異被 1600 格中只有 8 格不同的稀疏性掩蓋，反而看不出區別，故不在 repo 內保留個別 confusion 圖。
 
 **整體分佈**（每組 40 類中，per-class Top-1 為 1.0 / 部分對 / 0.0 的數量）：
 
@@ -114,7 +114,7 @@ Pixelization 的區塊在邊界是斷裂的（每個 b×b 內取平均），但*
 **`s35` 與 `s13` 是顯著的離群值**——兩者平均 Top-1 都低於 40%，與第 3 名 `s1` (56.25%) 之間有明顯落差。多次獨立 run 都觀察到這兩位（外加 `s40`、`s28`、`s33`、`s1`）穩定出現在 hardest 名單前段，這表示有些受試者本身就被 CNN 系統性地錯認，與去識別化強度無關。可能原因：
 
 - 該 subject 的 10 張在外觀（眼鏡、表情、頭巾、髮型變化）差異特別大，導致 train/test 之間泛化困難
-- 該 subject 在 ORL 中與另一個 subject 形狀相近（看 `figures/confusion/original_confusion.png` 可看 s35 / s13 各自被錯分到哪個 class）
+- 該 subject 在 ORL 中與另一個 subject 形狀相近（s35 / s13 個別錯分對象可從 `reports/per_class/original.csv` 與 `reports/per_class_summary.csv` 反推）
 - 訓練的 8-shot per class 環境下，這個 class 的 8 張訓練樣本沒抓到關鍵特徵
 
 **對最終報告的價值**：能說「整體 Top-1 ~90% 不是均勻分布，多數人是 100%，少數幾人（特別是 s35、s13）跨資料集都低於 40%」——這是 aggregate metric 看不到的細節，可以強化「平均數會掩蓋個體差異」的論點。

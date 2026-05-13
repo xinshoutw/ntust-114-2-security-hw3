@@ -7,7 +7,13 @@
   * gaussian_blur  : Gaussian Blurring 去識別化(k×k 高斯核卷積)
 """
 
-from .dataset_loader import DatasetIndex, stratified_split, load_image, iter_dataset
+from .dataset_loader import (
+    DatasetIndex,
+    stratified_split,
+    stratified_split_3way,
+    load_image,
+    iter_dataset,
+)
 from .face_detector import FaceDetector, BBox, detect_faces
 from .pixelize import pixelize, pixelize_region, pixelize_faces
 from .gaussian_blur import gaussian_blur, gaussian_blur_region, gaussian_blur_faces
@@ -15,6 +21,7 @@ from .gaussian_blur import gaussian_blur, gaussian_blur_region, gaussian_blur_fa
 __all__ = [
     "DatasetIndex",
     "stratified_split",
+    "stratified_split_3way",
     "load_image",
     "iter_dataset",
     "FaceDetector",

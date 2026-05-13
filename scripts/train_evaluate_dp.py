@@ -1,13 +1,14 @@
-"""Train and evaluate CNN attacks on DP datasets from for_cnn.zip.
+"""Train and evaluate CNN attacks on the DP datasets stored in data/dp/.
 
-Expected input layout:
+Covers four method families × 7 epsilon values:
 
-    outputs/for_cnn/
-      dp_pix_b8/eps0.1/s1/1.png
-      dp_pix_b16/eps0.1/s1/1.png
-      dp_blur/eps0.1/s1/1.png
+* dp_pix_b8       data/dp/dp_pix_b8/eps{0.1..5.0}/
+* dp_pix_b16      data/dp/dp_pix_b16/eps{0.1..5.0}/
+* lp_blur         data/dp/lp_blur/k45_eps{0.1..5.0}/        (k fixed at 45)
+* dp_blur_split   data/dp/dp_blur_split/k45_eps{0.1..5.0}/  (k fixed at 45)
 
-Each DP variant is trained independently, matching the Step 2 attack protocol.
+Each (method, epsilon) is trained independently, matching the Step 2 protocol
+(SimpleCNN, SGD, 100 epoch, best-checkpoint selected by validation accuracy).
 """
 
 from __future__ import annotations
@@ -22,25 +23,26 @@ from evaluate import evaluate_one, print_table, write_csv
 from train import get_device, load_config
 
 
-METHODS = {
-    "dp_pix_b8": "dp_pix_b8",
-    "dp_pix_b16": "dp_pix_b16",
-    "dp_blur": "dp_blur",
-}
 EPSILONS = ["0.1", "0.3", "0.5", "0.7", "1.0", "3.0", "5.0"]
+PIX_BLOCK_SIZES = (2, 4, 8, 16)
+BLUR_K_DEFAULT = 45
 
 
 def safe_epsilon(epsilon: str) -> str:
     return epsilon.replace(".", "_")
 
 
-def build_dp_datasets(root: str | Path) -> dict[str, Path]:
+def build_dp_datasets(root: str | Path, blur_k: int = BLUR_K_DEFAULT) -> dict[str, Path]:
     root = Path(root)
     datasets: dict[str, Path] = {}
-    for method_name, method_dir in METHODS.items():
-        for epsilon in EPSILONS:
-            name = f"{method_name}_eps{safe_epsilon(epsilon)}"
-            datasets[name] = root / method_dir / f"eps{epsilon}"
+    for epsilon in EPSILONS:
+        safe = safe_epsilon(epsilon)
+        for b in PIX_BLOCK_SIZES:
+            datasets[f"dp_pix_b{b}_eps{safe}"] = root / f"dp_pix_b{b}" / f"eps{epsilon}"
+        datasets[f"lp_blur_k{blur_k}_eps{safe}"] = root / "lp_blur" / f"k{blur_k}_eps{epsilon}"
+        datasets[f"dp_blur_split_k{blur_k}_eps{safe}"] = (
+            root / "dp_blur_split" / f"k{blur_k}_eps{epsilon}"
+        )
     return datasets
 
 
@@ -62,12 +64,18 @@ def train_one(name: str, dataset_root: Path, config_path: str, device: str | Non
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train/evaluate all DP CNN attack datasets.")
-    parser.add_argument("--root", default="outputs/for_cnn", help="Extracted for_cnn root.")
+    parser.add_argument("--root", default="data/dp", help="DP dataset root.")
+    parser.add_argument("--blur-k", type=int, default=BLUR_K_DEFAULT, help="Blur kernel size for LP-Blur/DP-Blur-Split datasets.")
     parser.add_argument("--config", default="config.yaml", help="Training config path.")
     parser.add_argument("--output", default="reports/dp_evaluation.csv", help="Evaluation CSV output.")
     parser.add_argument("--datasets", nargs="*", default=None, help="Optional DP dataset names to run.")
     parser.add_argument("--skip-train", action="store_true", help="Only evaluate existing checkpoints.")
     parser.add_argument("--skip-eval", action="store_true", help="Only train checkpoints.")
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Skip training for datasets whose checkpoint file already exists.",
+    )
     parser.add_argument(
         "--device",
         default=None,
@@ -82,7 +90,7 @@ def main() -> None:
     test_split = config["test_split"]
     checkpoint_dir = Path(str(config.get("checkpoint_dir", "checkpoints")))
 
-    all_datasets = build_dp_datasets(args.root)
+    all_datasets = build_dp_datasets(args.root, blur_k=args.blur_k)
     selected_names = args.datasets or list(all_datasets)
 
     rows: list[dict[str, Any]] = []
@@ -96,8 +104,11 @@ def main() -> None:
 
         checkpoint_path = checkpoint_dir / f"{name}.pth"
         if not args.skip_train:
-            print(f"training {name}")
-            train_one(name, dataset_root, args.config, args.device)
+            if args.skip_existing and checkpoint_path.exists():
+                print(f"skip-existing: {name} already trained at {checkpoint_path}")
+            else:
+                print(f"training {name}")
+                train_one(name, dataset_root, args.config, args.device)
 
         if not args.skip_eval:
             print(f"evaluating {name}")

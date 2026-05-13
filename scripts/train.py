@@ -2,7 +2,7 @@
 
 Example:
     uv run --extra attack python scripts/train.py \
-        --dataset-root outputs/pixelized/pix_b8 \
+        --dataset-root data/deid/pixelized/pix_b8 \
         --name pix_b8 \
         --config config.yaml
 """
@@ -133,7 +133,7 @@ def map_split_path(dataset_root: Path, split_path: str) -> Path:
 
 
 class SplitImageDataset(Dataset):
-    """PyTorch Dataset backed by outputs/split_train.json or split_test.json."""
+    """PyTorch Dataset backed by data/splits/split_train.json or split_test.json."""
 
     def __init__(self, dataset_root: str | Path, split_json: str | Path, image_size: int):
         self.dataset_root = Path(dataset_root)
@@ -166,28 +166,41 @@ def build_loaders(
     test_split: str | Path,
     config: dict[str, Any],
     device: torch.device,
-) -> tuple[DataLoader, DataLoader, dict[int, str]]:
+    val_split: str | Path | None = None,
+) -> tuple[DataLoader, DataLoader, dict[int, str]] | tuple[DataLoader, DataLoader, DataLoader, dict[int, str]]:
+    """Build DataLoaders.
+
+    Without ``val_split`` (legacy): returns ``(train_loader, test_loader, label_to_name)``.
+    With ``val_split``: returns ``(train_loader, val_loader, test_loader, label_to_name)``.
+    """
     train_dataset = SplitImageDataset(dataset_root, train_split, int(config["image_size"]))
     test_dataset = SplitImageDataset(dataset_root, test_split, int(config["image_size"]))
 
     if train_dataset.label_to_name != test_dataset.label_to_name:
         raise ValueError("Train/test split files must use the same labels.")
 
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=int(config["batch_size"]),
-        shuffle=True,
-        num_workers=int(config["num_workers"]),
-        pin_memory=device.type == "cuda",
-    )
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=int(config["batch_size"]),
-        shuffle=False,
-        num_workers=int(config["num_workers"]),
-        pin_memory=device.type == "cuda",
-    )
-    return train_loader, test_loader, train_dataset.label_to_name
+    pin_memory = device.type == "cuda"
+
+    def make_loader(dataset: Dataset, shuffle: bool) -> DataLoader:
+        return DataLoader(
+            dataset,
+            batch_size=int(config["batch_size"]),
+            shuffle=shuffle,
+            num_workers=int(config["num_workers"]),
+            pin_memory=pin_memory,
+        )
+
+    train_loader = make_loader(train_dataset, shuffle=True)
+    test_loader = make_loader(test_dataset, shuffle=False)
+
+    if val_split is None:
+        return train_loader, test_loader, train_dataset.label_to_name
+
+    val_dataset = SplitImageDataset(dataset_root, val_split, int(config["image_size"]))
+    if val_dataset.label_to_name != train_dataset.label_to_name:
+        raise ValueError("Train/val/test split files must use the same labels.")
+    val_loader = make_loader(val_dataset, shuffle=False)
+    return train_loader, val_loader, test_loader, train_dataset.label_to_name
 
 
 def run_one_epoch(
@@ -241,7 +254,12 @@ def write_log_header(log_path: Path) -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
-        writer.writerow(["epoch", "train_loss", "train_acc", "test_loss", "test_acc", "test_top5_acc"])
+        writer.writerow([
+            "epoch",
+            "train_loss", "train_acc",
+            "val_loss", "val_acc", "val_top5_acc",
+            "test_loss", "test_acc", "test_top5_acc",
+        ])
 
 
 def append_log(log_path: Path, row: list[float | int]) -> None:
@@ -255,7 +273,7 @@ def save_checkpoint(
     label_to_name: dict[int, str],
     config: dict[str, Any],
     epoch: int,
-    best_test_acc: float,
+    best_val_acc: float,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -264,7 +282,7 @@ def save_checkpoint(
             "label_to_name": label_to_name,
             "config": config,
             "epoch": epoch,
-            "best_test_acc": best_test_acc,
+            "best_val_acc": best_val_acc,
         },
         output_path,
     )
@@ -272,10 +290,11 @@ def save_checkpoint(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train a CNN on one de-identified dataset.")
-    parser.add_argument("--dataset-root", required=True, help="Dataset root, e.g. outputs/pixelized/pix_b8.")
+    parser.add_argument("--dataset-root", required=True, help="Dataset root, e.g. data/deid/pixelized/pix_b8.")
     parser.add_argument("--name", required=True, help="Name used for checkpoint/log files.")
     parser.add_argument("--config", default="config.yaml", help="Training config path.")
     parser.add_argument("--train-split", default=None, help="Defaults to config train_split.")
+    parser.add_argument("--val-split", default=None, help="Defaults to config val_split.")
     parser.add_argument("--test-split", default=None, help="Defaults to config test_split.")
     parser.add_argument(
         "--device",
@@ -289,19 +308,25 @@ def main() -> None:
     set_seed(int(config.get("seed", 42)))
 
     train_split = args.train_split or config["train_split"]
+    val_split = args.val_split or config.get("val_split")
     test_split = args.test_split or config["test_split"]
+    if not val_split:
+        raise ValueError(
+            "val_split is required. Set 'val_split' in config.yaml or pass --val-split."
+        )
     checkpoint_dir = Path(str(config.get("checkpoint_dir", "checkpoints")))
     log_dir = Path(str(config.get("log_dir", "logs")))
 
     device = get_device(args.device or str(config.get("device", "auto")))
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = True
-    train_loader, test_loader, label_to_name = build_loaders(
+    train_loader, val_loader, test_loader, label_to_name = build_loaders(
         dataset_root=args.dataset_root,
         train_split=train_split,
         test_split=test_split,
         config=config,
         device=device,
+        val_split=val_split,
     )
 
     model = SimpleCNN(num_classes=len(label_to_name)).to(device)
@@ -321,9 +346,10 @@ def main() -> None:
     print(f"device: {device}")
     print(f"num_classes: {len(label_to_name)}")
 
-    best_test_acc = 0.0
+    best_val_acc = 0.0
     for epoch in range(1, int(config["epochs"]) + 1):
         train_loss, train_acc, _ = run_one_epoch(model, train_loader, criterion, device, optimizer)
+        val_loss, val_acc, val_top5_acc = run_one_epoch(model, val_loader, criterion, device)
         test_loss, test_acc, test_top5_acc = run_one_epoch(model, test_loader, criterion, device)
 
         append_log(
@@ -332,19 +358,24 @@ def main() -> None:
                 epoch,
                 round(train_loss, 6),
                 round(train_acc, 6),
+                round(val_loss, 6),
+                round(val_acc, 6),
+                round(val_top5_acc, 6),
                 round(test_loss, 6),
                 round(test_acc, 6),
                 round(test_top5_acc, 6),
             ],
         )
 
-        if test_acc >= best_test_acc:
-            best_test_acc = test_acc
-            save_checkpoint(output_path, model, label_to_name, config, epoch, best_test_acc)
+        # Best-checkpoint selection uses VAL accuracy only — test set stays held out.
+        if val_acc >= best_val_acc:
+            best_val_acc = val_acc
+            save_checkpoint(output_path, model, label_to_name, config, epoch, best_val_acc)
 
         print(
             f"epoch {epoch:03d}/{int(config['epochs'])} | "
             f"train_loss={train_loss:.4f} train_acc={train_acc:.4f} | "
+            f"val_loss={val_loss:.4f} val_acc={val_acc:.4f} | "
             f"test_loss={test_loss:.4f} test_acc={test_acc:.4f} "
             f"test_top5_acc={test_top5_acc:.4f}"
         )

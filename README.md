@@ -49,15 +49,15 @@
 
 ## 給組員（必讀）
 
-主要程式碼、可重建資料與報告用圖表都在 repo；模型 checkpoint、訓練 logs、reports 與 DP 影像資料集以外部 zip 交付。要快速接手 Step 2 / Step 3，只要看這幾個地方：
+所有資料、checkpoint、reports、figures、DP 影像都直接放在 repo，不需要再下載外部 zip。要快速接手 Step 2 / Step 3，只要看這幾個地方：
 
 | 你是 | 直接拿 | 一定要看 |
 |---|---|---|
-| **成員 3、4（CNN 攻擊）** | `outputs/pixelized/pix_b{2,4,8,16}/`、`outputs/blurred/blur_k{15,45,99}/`（已從真實 ORL 產好；結構同 ORL、檔名一一對應）、`outputs/split_train.json` / `outputs/split_test.json`（標準切分） | `docs/division-of-labor.md` 的「交付對接備註」、`src/facedeid/dataset_loader.py`（用 `DatasetIndex.from_att(...)` + `stratified_split(..., seed=42)`，**8 組各自獨立訓練、不可混訓**） |
-| **成員 5（差分隱私）** | 外部 artifact `for_cnn.zip`（DP 影像資料集與 `metrics.csv`） | 本 repo 使用 `scripts/train_evaluate_dp.py` 重跑 CNN attack，結果整理於 `docs/dp-attack-results.md` |
+| **成員 3、4（CNN 攻擊）** | `data/deid/pixelized/pix_b{2,4,8,16}/`、`data/deid/blurred/blur_k{15,45,99}/`（已從真實 ORL 產好；結構同 ORL、檔名一一對應）、`data/splits/split_train.json` / `data/splits/split_test.json`（標準切分）、`checkpoints/{original,pix_b*,blur_k*}.pth`（已訓練好的 8 個模型） | `docs/division-of-labor.md` 的「交付對接備註」、`src/facedeid/dataset_loader.py`（用 `DatasetIndex.from_att(...)` + `stratified_split(..., seed=42)`，**8 組各自獨立訓練、不可混訓**） |
+| **成員 5（差分隱私）** | `data/dp/{dp_pix_b8,dp_pix_b16,dp_blur}/eps*/`（已產好的 DP 影像）、`data/dp/metrics.csv`（MSE/SSIM）、`checkpoints/dp_*.pth`（21 個 DP 攻擊模型） | 本 repo 使用 `scripts/train_evaluate_dp.py` 重跑 CNN attack，結果整理於 `docs/dp-attack-results.md` |
 | 想了解全貌 | — | 本 README 的「總覽」「專案架構」、`docs/division-of-labor.md` |
 
-> 跑法：`uv sync` 之後 `./scripts/run_pixelize.sh` / `./scripts/run_blur.sh` 可重建 `outputs/`；`uv run pytest` 跑煙霧測試。新增的去識別化變體一律沿用 `seed=42` 的切分。
+> 跑法：`uv sync` 之後 `./scripts/run_pixelize.sh` / `./scripts/run_blur.sh` 可重建 `data/deid/`；`uv run pytest` 跑煙霧測試。新增的去識別化變體一律沿用 `seed=42` 的切分。
 
 ---
 
@@ -98,9 +98,9 @@ uv run ruff check src scripts tests # 風格檢查
 ```bash
 # 0. 準備資料集：確認真實 ORL 位於 data/att_faces/s1 ... s40（見 data/README.md）
 
-# 1. 產生去識別化資料集（輸出到 outputs/，已被 .gitignore）
-./scripts/run_pixelize.sh           # → outputs/pixelized/pix_b{2,4,8,16}
-./scripts/run_blur.sh               # → outputs/blurred/blur_k{15,45,99}
+# 1. 產生去識別化資料集（輸出到 data/deid/）
+./scripts/run_pixelize.sh           # → data/deid/pixelized/pix_b{2,4,8,16}
+./scripts/run_blur.sh               # → data/deid/blurred/blur_k{15,45,99}
 
 # 2. 產生視覺比較圖（輸出到 figures/）
 uv run python scripts/make_pixelize_comparison.py
@@ -108,8 +108,8 @@ uv run python scripts/make_blur_comparison.py
 uv run python scripts/make_detect_pixelize_demo.py
 
 # 也可以直接呼叫模組 CLI：
-uv run python -m facedeid.gaussian_blur --input data/att_faces --output outputs/blurred/blur_k45 --k 45
-uv run python -m facedeid.pixelize     --input data/att_faces --output outputs/pixelized/pix_b8  --b 8
+uv run python -m facedeid.gaussian_blur --input data/att_faces --output data/deid/blurred/blur_k45 --k 45
+uv run python -m facedeid.pixelize     --input data/att_faces --output data/deid/pixelized/pix_b8  --b 8
 ```
 
 ### 跑 CNN 重識別攻擊 pipeline
@@ -119,7 +119,7 @@ uv run python -m facedeid.pixelize     --input data/att_faces --output outputs/p
 uv sync --extra attack
 
 # 單獨訓練一組資料；auto 會優先使用 CUDA，其次 Apple MPS，最後 CPU
-uv run --extra attack python scripts/train.py --dataset-root outputs/pixelized/pix_b8 --name pix_b8 --config config.yaml --device auto
+uv run --extra attack python scripts/train.py --dataset-root data/deid/pixelized/pix_b8 --name pix_b8 --config config.yaml --device auto
 
 # 一次分別訓練 original + pix_b{2,4,8,16} + blur_k{15,45,99}
 uv run --extra attack python scripts/train_all.py --config config.yaml --device auto
@@ -137,8 +137,7 @@ uv run --extra attack python scripts/summarize_logs.py --log-dir logs --output r
 # 評估 8 組 checkpoint 的 Top-1 / Top-5 attack accuracy
 uv run --extra attack python scripts/evaluate.py --all --device auto --output reports/evaluation.csv
 
-# 若已收到成員 5 的 for_cnn.zip 並解壓成 outputs/for_cnn/
-# 可訓練並評估 DP 版本的 attack accuracy
+# DP 影像資料集已直接放在 data/dp/，可訓練並評估 DP 版本的 attack accuracy
 uv run --extra attack python scripts/train_evaluate_dp.py --device auto --output reports/dp_evaluation.csv
 ```
 
@@ -172,7 +171,20 @@ face-deid-hw3/
 ├── .gitignore
 ├── data/
 │   ├── README.md                   # ORL / FaceScrub / CelebA 下載與目錄結構說明
-│   └── att_faces/                  # AT&T (ORL)：s1/1.pgm ... s40/10.pgm（真實資料）+ ORL_README.txt
+│   ├── att_faces/                  # AT&T (ORL)：s1/1.pgm ... s40/10.pgm（真實資料）+ ORL_README.txt
+│   ├── deid/                       # Step 1 產出：傳統去識別化影像
+│   │   ├── pixelized/pix_b{2,4,8,16}/  #   Pixelization 各 b（PNG，結構同 ORL）
+│   │   └── blurred/blur_k{15,45,99}/    #   Gaussian Blur 各 k
+│   ├── dp/                         # Step 3 產出：DP 影像 + metrics
+│   │   ├── dp_pix_b8/eps{0.1..5.0}/     #   DP-Pix b=8
+│   │   ├── dp_pix_b16/eps{0.1..5.0}/    #   DP-Pix b=16
+│   │   ├── dp_blur/eps{0.1..5.0}/       #   DP-Blur
+│   │   └── metrics.csv             #   MSE / SSIM
+│   └── splits/                     # 統一 train/test 切分（seed=42）
+│       ├── split_train.json        #   320 張
+│       └── split_test.json         #   80 張
+├── checkpoints/                    # 8 個 Step 2 + 21 個 Step 3 DP 攻擊模型
+├── reports/                        # evaluation.csv、per_class/、hardest_classes.csv
 ├── src/
 │   └── facedeid/                   # 主套件
 │       ├── __init__.py             # 對外 re-export
@@ -190,19 +202,15 @@ face-deid-hw3/
 │   └── train_evaluate_dp.py        # Step 3 DP 資料的 CNN attack 驗證
 ├── tests/
 │   └── test_smoke.py               # 去識別化函式的最小煙霧測試（uv run pytest）
-├── figures/                        # 報告用視覺比較圖
-├── outputs/                        # Step 1 產出：去識別化資料集 + 標準 train/test 切分
-│   ├── pixelized/pix_b{2,4,8,16}/  #   Pixelization 各 b（PNG，結構同 ORL）
-│   ├── blurred/blur_k{15,45,99}/   #   Gaussian Blur 各 k
-│   ├── split_train.json            #   標準切分（320 張，seed=42）
-│   └── split_test.json             #   標準切分（80 張）
+├── figures/                        # 報告用視覺比較圖 + per_class_top1 熱圖
 └── docs/
     └── division-of-labor.md        # 五人分工與交付清單
 ```
 
-> `outputs/` 已 commit 進 repo（確保組員拿到的內容完全一致），但它可由 `./scripts/run_*.sh` 從 `data/att_faces/` 重建。
+> `data/deid/` 與 `data/dp/` 已直接 commit 進 repo，不依賴外部 zip。
+> `data/deid/` 可由 `./scripts/run_*.sh` 從 `data/att_faces/` 重建；`data/dp/` 由成員 5 的 `scripts/dp_*.py` 產出。
 
-> Step 2 的 CNN 訓練與評估 pipeline 已加入 `src/facedeid/model.py`、`scripts/train.py`、`scripts/train_all.py`、`scripts/plot_log.py`、`scripts/summarize_logs.py`、`scripts/evaluate.py` 與 `config.yaml`。Step 3 的 DP 影像與 MSE/SSIM 由成員 5 以外部 artifact `for_cnn.zip` 提供，本 repo 以 `scripts/train_evaluate_dp.py` 完成 CNN attack 驗證。
+> Step 2 的 CNN 訓練與評估 pipeline 在 `src/facedeid/model.py`、`scripts/train.py`、`scripts/train_all.py`、`scripts/plot_log.py`、`scripts/summarize_logs.py`、`scripts/evaluate.py` 與 `config.yaml`。Step 3 的 DP 影像由 `scripts/dp_pixelization.py` / `scripts/dp_blur.py` 產出，CNN attack 驗證走 `scripts/train_evaluate_dp.py`。
 
 ---
 
@@ -221,7 +229,7 @@ face-deid-hw3/
 1. `uv run ruff check src scripts` 無錯誤（已安裝 dev group 時）。
 2. 新增模組在 `src/facedeid/__init__.py` 有對應 re-export（如適用）。
 3. 任何新的去識別化變體都沿用 `seed=42` 的 train/test 切分。
-4. 不要把 `outputs/`、`.venv/`、`*.pth` 等生成物 commit 進 repo。
+4. 不要把 `.venv/`、`logs/`、`plots/`、`__pycache__/` 等 transient 產物 commit 進 repo。
 
 ---
 

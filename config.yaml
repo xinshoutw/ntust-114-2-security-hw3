@@ -7,7 +7,8 @@ momentum: 0.9
 num_workers: 0
 seed: 42
 device: auto
-train_split: outputs/split_train.json
-test_split: outputs/split_test.json
+train_split: data/splits/split_train.json
+val_split: data/splits/split_val.json
+test_split: data/splits/split_test.json
 checkpoint_dir: checkpoints
 log_dir: logs

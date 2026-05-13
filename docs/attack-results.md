@@ -1,6 +1,6 @@
 # Step 2 CNN Attack Results
 
-本頁整理 CNN 對原圖與去識別化影像的重識別攻擊結果。所有資料集共用 `outputs/split_train.json` 與 `outputs/split_test.json`，每一種去識別化參數都獨立訓練與評估一個 CNN，沒有混合訓練。
+本頁整理 CNN 對原圖與去識別化影像的重識別攻擊結果。所有資料集共用 `data/splits/split_train.json` 與 `data/splits/split_test.json`，每一種去識別化參數都獨立訓練與評估一個 CNN，沒有混合訓練。
 
 完整的「為什麼」分析另放於 [`attack-analysis.md`](attack-analysis.md)：per-dataset 解讀、pix 為什麼不單調、blur 為什麼單調、N=80 統計侷限、為什麼仍需要 Step 3 DP。
 

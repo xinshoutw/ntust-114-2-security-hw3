@@ -4,9 +4,9 @@
 # 批次對指定資料集套用 Pixelization,b ∈ {2, 4, 8, 16},產出 4 組去識別化資料集。
 #
 # 使用方式(在專案根目錄執行):
-#   ./scripts/run_pixelize.sh                     # input=data/att_faces, output_root=outputs/pixelized
-#   ./scripts/run_pixelize.sh data/facescrub outputs/fs_pix --detect-faces
-#   INPUT=data/celeb OUTPUT_ROOT=outputs/celeb_pix DETECT=--detect-faces ./scripts/run_pixelize.sh
+#   ./scripts/run_pixelize.sh                     # input=data/att_faces, output_root=data/deid/pixelized
+#   ./scripts/run_pixelize.sh data/facescrub data/deid/fs_pix --detect-faces
+#   INPUT=data/celeb OUTPUT_ROOT=data/deid/celeb_pix DETECT=--detect-faces ./scripts/run_pixelize.sh
 #
 # 對 ORL 不要加 --detect-faces(整張就是臉,直接全圖 pixelize 即可)。
 # 對 FaceScrub / CelebA 等含背景的資料集才需要 --detect-faces。
@@ -20,7 +20,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 INPUT="${1:-${INPUT:-data/att_faces}}"
-OUTPUT_ROOT="${2:-${OUTPUT_ROOT:-outputs/pixelized}}"
+OUTPUT_ROOT="${2:-${OUTPUT_ROOT:-data/deid/pixelized}}"
 DETECT="${DETECT:-}"               # 設成 "--detect-faces" 來啟用人臉偵測
 BACKEND="${BACKEND:-haar}"         # haar | hog
 RUNNER="${RUNNER:-uv run python}"  # 沒裝 uv 時可改成 RUNNER="python3"(需先 PYTHONPATH=src)

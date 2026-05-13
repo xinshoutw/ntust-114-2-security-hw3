@@ -1,8 +1,8 @@
 # Step 3 DP CNN Attack Results
 
-本頁整理成員 5 提供的 DP 影像資料集在 CNN 重識別攻擊下的結果。資料集以外部 artifact `for_cnn.zip` 交付，並已確認其中的 original 影像與本 repo 的 AT&T (ORL) 資料一致。
+本頁整理成員 5 提供的 DP 影像資料集在 CNN 重識別攻擊下的結果。資料集直接放在 `data/dp/`（包含三種方法 × 7 個 ε 共 21 組），效用指標 MSE/SSIM 在 `data/dp/metrics.csv`，敏感度推導見 `docs/Differentially_Private_Image_Obfuscation.pdf`。
 
-每一個 method × epsilon 都獨立訓練一個 CNN，沒有混合訓練。評估使用相同的 `outputs/split_train.json` 與 `outputs/split_test.json`。
+每一個 method × epsilon 都獨立訓練一個 CNN，沒有混合訓練。評估使用相同的 `data/splits/split_train.json` 與 `data/splits/split_test.json`。
 
 執行指令：
 

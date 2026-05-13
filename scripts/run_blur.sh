@@ -4,9 +4,9 @@
 # 批次對指定資料集套用 Gaussian Blurring,k ∈ {15, 45, 99},產出 3 組去識別化資料集。
 #
 # 使用方式(在專案根目錄執行):
-#   ./scripts/run_blur.sh                         # input=data/att_faces, output_root=outputs/blurred
-#   ./scripts/run_blur.sh data/facescrub outputs/fs_blur --detect-faces
-#   INPUT=data/celeb OUTPUT_ROOT=outputs/celeb_blur DETECT=--detect-faces ./scripts/run_blur.sh
+#   ./scripts/run_blur.sh                         # input=data/att_faces, output_root=data/deid/blurred
+#   ./scripts/run_blur.sh data/facescrub data/deid/fs_blur --detect-faces
+#   INPUT=data/celeb OUTPUT_ROOT=data/deid/celeb_blur DETECT=--detect-faces ./scripts/run_blur.sh
 #
 # 對 ORL 不要加 --detect-faces(整張就是臉,直接全圖 blur,等同論文設定)。
 # 對 FaceScrub / CelebA 等含背景的資料集才需要 --detect-faces。
@@ -20,7 +20,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 INPUT="${1:-${INPUT:-data/att_faces}}"
-OUTPUT_ROOT="${2:-${OUTPUT_ROOT:-outputs/blurred}}"
+OUTPUT_ROOT="${2:-${OUTPUT_ROOT:-data/deid/blurred}}"
 DETECT="${DETECT:-}"               # 設成 "--detect-faces" 來啟用人臉偵測
 BACKEND="${BACKEND:-haar}"         # haar | hog
 SIGMA="${SIGMA:-0}"                # 0 = 讓 OpenCV 依 k 自動推算 σ

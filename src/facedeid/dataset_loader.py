@@ -149,6 +149,49 @@ def stratified_split(
     return train, test
 
 
+def stratified_split_3way(
+    idx: DatasetIndex,
+    val_ratio: float = 0.2,
+    test_ratio: float = 0.2,
+    seed: int = 42,
+) -> tuple[DatasetIndex, DatasetIndex, DatasetIndex]:
+    """
+    Stratified 3-way split: train / val / test。每個 class 都至少 1 張在 val、1 張在 test。
+
+    回傳 (train, val, test),三者共用同一個 label_to_name。
+
+    例：ORL 每 class 10 張、val_ratio=0.2、test_ratio=0.2 → 每 class 6 train、2 val、2 test。
+    """
+    assert 0 < val_ratio < 1 and 0 < test_ratio < 1, "val/test ratio 必須在 (0, 1)"
+    assert val_ratio + test_ratio < 1, "val + test 不可 >= 1,要留資料給 train"
+    rng = random.Random(seed)
+    by_label: dict[int, list[str]] = {}
+    for path, label in idx.items:
+        by_label.setdefault(label, []).append(path)
+
+    train_items, val_items, test_items = [], [], []
+    for label, paths in by_label.items():
+        paths = list(paths)
+        rng.shuffle(paths)
+        n = len(paths)
+        n_test = max(1, int(round(n * test_ratio)))
+        n_val = max(1, int(round(n * val_ratio)))
+        if n_test + n_val >= n:
+            raise ValueError(
+                f"class {label} 樣本不夠分:n={n}, n_val={n_val}, n_test={n_test}"
+            )
+        test_items.extend((p, label) for p in paths[:n_test])
+        val_items.extend((p, label) for p in paths[n_test : n_test + n_val])
+        train_items.extend((p, label) for p in paths[n_test + n_val :])
+
+    label_to_name = dict(idx.label_to_name)
+    return (
+        DatasetIndex(items=train_items, label_to_name=label_to_name, root=idx.root),
+        DatasetIndex(items=val_items, label_to_name=label_to_name, root=idx.root),
+        DatasetIndex(items=test_items, label_to_name=label_to_name, root=idx.root),
+    )
+
+
 # ---- load -------------------------------------------------------------------
 def load_image(path: str, grayscale: bool = True) -> np.ndarray:
     """讀單張圖。預設灰階(因為 ORL 是灰階,實驗統一灰階較方便)。"""

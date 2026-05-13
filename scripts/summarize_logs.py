@@ -23,6 +23,8 @@ def summarize_log(log_path: Path, metric: str) -> dict[str, str | float | int]:
         "best_metric": metric,
         "train_loss": float(best["train_loss"]),
         "train_acc": float(best["train_acc"]),
+        "val_loss": float(best.get("val_loss", "nan")),
+        "val_acc": float(best.get("val_acc", "nan")),
         "test_loss": float(best["test_loss"]),
         "top1_acc": float(best["test_acc"]),
         "top5_acc": float(best["test_top5_acc"]),
@@ -37,6 +39,8 @@ def write_summary(rows: list[dict[str, str | float | int]], output_path: Path) -
         "best_metric",
         "train_loss",
         "train_acc",
+        "val_loss",
+        "val_acc",
         "test_loss",
         "top1_acc",
         "top5_acc",
@@ -51,7 +55,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Summarize Step 2 training logs.")
     parser.add_argument("--log-dir", default="logs", help="Folder containing CSV logs.")
     parser.add_argument("--output", default="reports/summary.csv", help="Output summary CSV.")
-    parser.add_argument("--metric", default="test_acc", choices=["test_acc", "test_top5_acc"])
+    parser.add_argument("--metric", default="val_acc", choices=["val_acc", "test_acc", "test_top5_acc"])
     args = parser.parse_args()
 
     log_paths = sorted(Path(args.log_dir).glob("*.csv"))

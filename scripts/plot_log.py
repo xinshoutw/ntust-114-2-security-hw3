@@ -28,8 +28,12 @@ def plot_one_log(log_path: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     title = log_path.stem
 
+    has_val = "val_loss" in log
+
     plt.figure(figsize=(8, 5))
     plt.plot(log["epoch"], log["train_loss"], marker="o", label="Train Loss")
+    if has_val:
+        plt.plot(log["epoch"], log["val_loss"], marker="o", label="Val Loss")
     plt.plot(log["epoch"], log["test_loss"], marker="o", label="Test Loss")
     plt.title(f"{title} Loss")
     plt.xlabel("Epoch")
@@ -43,6 +47,8 @@ def plot_one_log(log_path: Path, output_dir: Path) -> None:
 
     plt.figure(figsize=(8, 5))
     plt.plot(log["epoch"], log["train_acc"], marker="o", label="Train Top-1 Acc")
+    if has_val:
+        plt.plot(log["epoch"], log["val_acc"], marker="o", label="Val Top-1 Acc")
     plt.plot(log["epoch"], log["test_acc"], marker="o", label="Test Top-1 Acc")
     plt.plot(log["epoch"], log["test_top5_acc"], marker="o", label="Test Top-5 Acc")
     plt.title(f"{title} Accuracy")

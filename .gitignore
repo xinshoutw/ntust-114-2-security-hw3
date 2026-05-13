@@ -10,13 +10,14 @@ dist/
 .venv/
 .uv-cache/
 
-# Step 2 generated training outputs
+# Step 2 / Step 3 training outputs are committed for reproducibility:
+#   checkpoints/  reports/  logs/  plots/
+# (uncomment lines below to ignore if generating from scratch on a fresh clone)
 # checkpoints/
 # *.pth
-logs/
-plots/
+# logs/
+# plots/
 # reports/
-outputs/for_cnn/
 
 # OS / editor
 .DS_Store

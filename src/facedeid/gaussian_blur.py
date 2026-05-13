@@ -27,8 +27,8 @@ Gaussian Blurring 去識別化主程式(成員 2 交付)。
     out = gaussian_blur(img, k=45)
 
     # CLI:批次處理整個資料夾(在專案根目錄用 uv run)
-    uv run python -m facedeid.gaussian_blur --input data/att_faces --output outputs/blurred/blur_k45 --k 45
-    uv run python -m facedeid.gaussian_blur --input data/celeb --output outputs/celeb_blur_k45 --k 45 --detect-faces
+    uv run python -m facedeid.gaussian_blur --input data/att_faces --output data/deid/blurred/blur_k45 --k 45
+    uv run python -m facedeid.gaussian_blur --input data/celeb --output data/deid/celeb_blur_k45 --k 45 --detect-faces
 """
 from __future__ import annotations
 

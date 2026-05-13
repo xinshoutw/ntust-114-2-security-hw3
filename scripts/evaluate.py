@@ -3,7 +3,7 @@
 Examples:
     uv run --extra attack python scripts/evaluate.py --all --device auto
     uv run --extra attack python scripts/evaluate.py \
-        --dataset-root outputs/pixelized/pix_b8 \
+        --dataset-root data/deid/pixelized/pix_b8 \
         --checkpoint checkpoints/pix_b8.pth \
         --name pix_b8
 """
@@ -25,13 +25,13 @@ from train import build_loaders, get_device, load_config
 
 DATASETS = {
     "original": "data/att_faces",
-    "pix_b2": "outputs/pixelized/pix_b2",
-    "pix_b4": "outputs/pixelized/pix_b4",
-    "pix_b8": "outputs/pixelized/pix_b8",
-    "pix_b16": "outputs/pixelized/pix_b16",
-    "blur_k15": "outputs/blurred/blur_k15",
-    "blur_k45": "outputs/blurred/blur_k45",
-    "blur_k99": "outputs/blurred/blur_k99",
+    "pix_b2": "data/deid/pixelized/pix_b2",
+    "pix_b4": "data/deid/pixelized/pix_b4",
+    "pix_b8": "data/deid/pixelized/pix_b8",
+    "pix_b16": "data/deid/pixelized/pix_b16",
+    "blur_k15": "data/deid/blurred/blur_k15",
+    "blur_k45": "data/deid/blurred/blur_k45",
+    "blur_k99": "data/deid/blurred/blur_k99",
 }
 
 
@@ -126,7 +126,10 @@ def evaluate_one(
         "top1_acc": round(float(metrics["top1_acc"]), 6),
         "top5_acc": round(float(metrics["top5_acc"]), 6),
         "best_epoch": checkpoint.get("epoch", ""),
-        "checkpoint_best_test_acc": round(float(checkpoint.get("best_test_acc", 0.0)), 6),
+        "checkpoint_best_val_acc": round(
+            float(checkpoint.get("best_val_acc", checkpoint.get("best_test_acc", 0.0))),
+            6,
+        ),
         "device": str(device),
     }
 

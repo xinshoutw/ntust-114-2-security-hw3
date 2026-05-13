@@ -10,13 +10,13 @@ from pathlib import Path
 
 DATASETS = {
     "original": "data/att_faces",
-    "pix_b2": "outputs/pixelized/pix_b2",
-    "pix_b4": "outputs/pixelized/pix_b4",
-    "pix_b8": "outputs/pixelized/pix_b8",
-    "pix_b16": "outputs/pixelized/pix_b16",
-    "blur_k15": "outputs/blurred/blur_k15",
-    "blur_k45": "outputs/blurred/blur_k45",
-    "blur_k99": "outputs/blurred/blur_k99",
+    "pix_b2": "data/deid/pixelized/pix_b2",
+    "pix_b4": "data/deid/pixelized/pix_b4",
+    "pix_b8": "data/deid/pixelized/pix_b8",
+    "pix_b16": "data/deid/pixelized/pix_b16",
+    "blur_k15": "data/deid/blurred/blur_k15",
+    "blur_k45": "data/deid/blurred/blur_k45",
+    "blur_k99": "data/deid/blurred/blur_k99",
 }
 
 
