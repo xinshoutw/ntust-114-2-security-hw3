@@ -41,16 +41,17 @@ def dp_pixelization(img: np.ndarray, block_size: int, epsilon: float) -> np.ndar
 
     pixelated_img = np.clip(pixelated_img, 0, 255).astype(np.uint8)
     return pixelated_img
-def process_dataset(input_dir: str, output_dir: str, block_size: int, epsilon: float):
-    """
-    Process a dataset of images by applying differential privacy pixelization.
+def process_dataset(
+    input_dir: str,
+    output_dir: str,
+    block_size: int,
+    epsilon: float,
+    seed: int | None = None,
+):
+    """Apply DP-Pixelization to every PGM under ``input_dir``."""
+    if seed is not None:
+        np.random.seed(seed)
 
-    Parameters:
-    input_dir (str): Directory containing the input images.
-    output_dir (str): Directory to save the processed images.
-    block_size (int): Size of the blocks to pixelate.
-    epsilon (float): Privacy budget for differential privacy.
-    """
     input_path = Path(input_dir)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -70,8 +71,9 @@ if __name__ == "__main__":
     parser.add_argument("--dst",   default="output/dp_pix")
     parser.add_argument("--block", type=int, default=8)
     parser.add_argument("--eps",   type=float, default=1.0)
+    parser.add_argument("--seed",  type=int, default=None, help="Optional NumPy seed for reproducible noise.")
     args = parser.parse_args()
 
     out_dir = f"{args.dst}_b{args.block}/eps{args.eps}"
-    process_dataset(args.src, out_dir, args.block, args.eps)
+    process_dataset(args.src, out_dir, args.block, args.eps, seed=args.seed)
     print(f"Done → {out_dir}")

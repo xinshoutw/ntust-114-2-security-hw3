@@ -1,67 +1,166 @@
-import numpy as np
-import cv2
+"""DP-Blur mechanisms aligned with Step 1 Gaussian Blur (k = 15/45/99).
+
+Two mechanisms are provided so that the report can contrast the privacy-utility
+trade-off:
+
+* lp_blur (Laplace-Perturbed Blur)
+    Apply k x k Gaussian blur, then add Laplace(0, 255 / (k**2 * eps)) noise to
+    every output pixel. This treats sensitivity as 255 / k**2 (the cell-mean
+    sensitivity from Fan 2018 DP-Pix) and uses ONE budget eps for the whole
+    image. It does NOT account for the fact that a single input pixel affects
+    k**2 output pixels through the kernel, so it does NOT strictly satisfy
+    epsilon-DP. Useful as a "blur + noise" reference baseline.
+
+* dp_blur_split (Budget-Split Differentially Private Blur)
+    Apply k x k Gaussian blur. To strictly satisfy epsilon-DP we use sequential
+    composition: each input pixel can affect up to k**2 outputs, so we allocate
+    budget eps / k**2 per output pixel. With sensitivity 255 per output (the
+    max change from a single full-range pixel flip) the Laplace scale becomes
+    255 * k**2 / eps. This is a conservative bound on the true per-output
+    sensitivity (~ max_weight * 255 ~= 255 / k**2 for a Gaussian kernel), so
+    the noise added is larger than strictly necessary. Strict epsilon-DP is
+    therefore preserved; utility suffers correspondingly.
+
+The CLI generates one (k, eps) dataset directory at a time and mirrors the
+input subject/file structure (writing PNG output).
+"""
+
+from __future__ import annotations
+
+import argparse
 from pathlib import Path
 
+import cv2
+import numpy as np
 
-def dp_blur(img: np.ndarray, epsilon: float, kernel_size: int = 5, sigma: float = 1.0, m: int = 1) -> np.ndarray:
+
+IMG_EXTS = {".pgm", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
+
+
+def _normalize_ksize(k: int) -> int:
+    if k < 1:
+        raise ValueError(f"k must be >= 1, got {k}")
+    if k % 2 == 0:
+        k += 1
+    return k
+
+
+def lp_blur(
+    img: np.ndarray,
+    k: int,
+    epsilon: float,
+    sigma: float = 0.0,
+) -> np.ndarray:
+    """LP-Blur: blur then add Laplace(0, 255/(k**2 * eps)) per pixel.
+
+    Not strict epsilon-DP (no composition over the k**2 affected outputs).
     """
-    Apply differential privacy blurring to the input image (Fan 2018).
-
-    Sensitivity follows Fan (2018) DP-Pix: Δf = 255 * m / k²,
-    where k = kernel_size and m = neighborhood parameter.
-
-    Parameters:
-    img (np.ndarray): Input image as a NumPy array.
-    epsilon (float): Privacy budget for differential privacy.
-    kernel_size (int): Size of the Gaussian kernel for blurring.
-    sigma (float): Standard deviation for Gaussian kernel.
-    m (int): Neighborhood parameter (number of pixels that may differ).
-
-    Returns:
-    np.ndarray: Blurred image with differential privacy applied.
-    """
+    k = _normalize_ksize(k)
     img_f = img.astype(np.float64)
-    blurred_img = cv2.GaussianBlur(img_f, (kernel_size, kernel_size), sigma)
+    blurred = cv2.GaussianBlur(img_f, (k, k), sigmaX=float(sigma), sigmaY=float(sigma))
+    scale = 255.0 / (k * k * epsilon)
+    noise = np.random.laplace(loc=0.0, scale=scale, size=blurred.shape)
+    out = np.clip(blurred + noise, 0.0, 255.0)
+    return out.astype(np.uint8)
 
-    sensitivity = 255.0 * m / (kernel_size ** 2)
-    scale = sensitivity / epsilon
 
-    noise = np.random.laplace(loc=0.0, scale=scale, size=blurred_img.shape)
-    noised_blurred_img = blurred_img + noise
+def dp_blur_split(
+    img: np.ndarray,
+    k: int,
+    epsilon: float,
+    sigma: float = 0.0,
+) -> np.ndarray:
+    """DP-Blur-Split: budget eps split across the k**2 affected outputs.
 
-    noised_blurred_img = np.clip(noised_blurred_img, 0, 255).astype(np.uint8)
-    return noised_blurred_img
-
-def process_dataset(input_dir: str, output_dir: str, epsilon: float, kernel_size: int = 5, sigma: float = 1.0):
+    Per-output Laplace scale is 255 * k**2 / epsilon. Strictly epsilon-DP under
+    the conservative sensitivity bound (255 per output).
     """
-    Process a dataset of images by applying differential privacy blurring.
+    k = _normalize_ksize(k)
+    img_f = img.astype(np.float64)
+    blurred = cv2.GaussianBlur(img_f, (k, k), sigmaX=float(sigma), sigmaY=float(sigma))
+    scale = 255.0 * (k * k) / epsilon
+    noise = np.random.laplace(loc=0.0, scale=scale, size=blurred.shape)
+    out = np.clip(blurred + noise, 0.0, 255.0)
+    return out.astype(np.uint8)
 
-    Parameters:
-    input_dir (str): Directory containing the input images.
-    output_dir (str): Directory to save the processed images.
-    epsilon (float): Privacy budget for differential privacy.
-    kernel_size (int): Size of the Gaussian kernel for blurring.
-    sigma (float): Standard deviation for Gaussian kernel.
-    """
+
+MECHANISMS = {
+    "lp": lp_blur,
+    "split": dp_blur_split,
+}
+
+
+def process_dataset(
+    input_dir: str | Path,
+    output_dir: str | Path,
+    mechanism: str,
+    k: int,
+    epsilon: float,
+    sigma: float = 0.0,
+    seed: int | None = None,
+) -> int:
+    if mechanism not in MECHANISMS:
+        raise ValueError(f"Unknown mechanism {mechanism!r}. Choices: {list(MECHANISMS)}")
+    fn = MECHANISMS[mechanism]
+    if seed is not None:
+        np.random.seed(seed)
+
     input_path = Path(input_dir)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    for pgm in sorted(input_path.rglob("*.pgm")):
-        img = cv2.imread(str(pgm), cv2.IMREAD_GRAYSCALE)
-        blurred_img = dp_blur(img, epsilon, kernel_size, sigma)
-        rel = pgm.relative_to(input_path)
-        output_file = output_path / rel.with_suffix(".png")
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(str(output_file), blurred_img)
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--src", default="data/att_faces")
-    parser.add_argument("--dst", default="output/dp_blur")
-    parser.add_argument("--eps", type=float, default=1.0)
+    n = 0
+    for src in sorted(input_path.rglob("*")):
+        if not src.is_file() or src.suffix.lower() not in IMG_EXTS:
+            continue
+        img = cv2.imread(str(src), cv2.IMREAD_GRAYSCALE)
+        if img is None:
+            continue
+        out = fn(img, k, epsilon, sigma)
+        rel = src.relative_to(input_path)
+        dst = output_path / rel.with_suffix(".png")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(dst), out)
+        n += 1
+    return n
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Generate one DP-Blur dataset variant.")
+    parser.add_argument("--src", default="data/att_faces", help="Input dataset root.")
+    parser.add_argument(
+        "--dst",
+        required=True,
+        help="Output dataset root (created if missing).",
+    )
+    parser.add_argument("--mechanism", choices=list(MECHANISMS), required=True)
+    parser.add_argument("--k", type=int, required=True, help="Gaussian kernel size.")
+    parser.add_argument("--eps", type=float, required=True, help="Privacy budget epsilon.")
+    parser.add_argument(
+        "--sigma",
+        type=float,
+        default=0.0,
+        help="Gaussian sigma. 0 = OpenCV auto from k (default).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Optional NumPy seed for reproducible noise.",
+    )
     args = parser.parse_args()
 
-    out_dir = f"{args.dst}/eps{args.eps}"
-    process_dataset(args.src, out_dir, args.eps)
-    print(f"Done → {out_dir}")
+    n = process_dataset(
+        input_dir=args.src,
+        output_dir=args.dst,
+        mechanism=args.mechanism,
+        k=args.k,
+        epsilon=args.eps,
+        sigma=args.sigma,
+        seed=args.seed,
+    )
+    print(f"mechanism={args.mechanism} k={args.k} eps={args.eps} -> wrote {n} images to {args.dst}")
+
+
+if __name__ == "__main__":
+    main()
