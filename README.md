@@ -41,7 +41,7 @@
 | Step 2 | Top-1/Top-5 評估（held-out test）+ 8 組攻擊實驗 + 對照表 | ✅ 完成 |
 | Step 3 | DP-Pixelization b∈{2,4,8,16} + 兩種 DP-Blur 機制（LP-Blur, DP-Blur-Split） | ✅ 完成 |
 | Step 3 | MSE/SSIM vs ε 曲線、DP-vs-NP 攻擊準確率對照（42 組） | ✅ 完成 |
-| 文件 | 最終報告（方法 + 結果 + 討論 + 分工表） | 🟡 規劃中（由成員 2 統整、排版） |
+| 文件 | 最終報告（方法 + 結果 + 討論 + 分工表） | ✅ 完成 |
 
 詳細分工見 [`docs/division-of-labor.md`](docs/division-of-labor.md)。
 
